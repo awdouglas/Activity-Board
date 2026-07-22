@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Idea Board</title>
+<title>Activity Idea Board</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -26,7 +26,7 @@
     color: var(--text);
     min-height: 100vh;
   }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px; padding-bottom: 20vh; }
   header { text-align: center; margin-bottom: 28px; }
   header h1 { margin: 0 0 6px; font-size: 2rem; letter-spacing: -0.5px; }
   header p { margin: 0; color: var(--muted); }
@@ -50,6 +50,8 @@
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); }
   .dot.off { background: var(--danger); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .link-btn.spinning { display: inline-block; animation: spin 0.6s linear; }
 
   form.card, .idea {
     background: var(--card); border: 1px solid var(--border);
@@ -153,9 +155,9 @@
   <!-- Initials modal -->
   <div class="overlay" id="overlay">
     <div class="modal">
-      <h2>Welcome! 👋</h2>
+      <h2>Welcome! </h2>
       <p>Enter your initials so people know who added and voted for ideas.</p>
-      <input id="initialsInput" maxlength="3" placeholder="e.g. AD" />
+      <input id="initialsInput" maxlength="3" placeholder="" />
       <button class="btn" style="width:100%" onclick="saveInitials()">Let's go</button>
     </div>
   </div>
@@ -181,14 +183,14 @@
 
   <div class="wrap">
     <header>
-      <h1>💡 Idea Board</h1>
+      <h1>Activity Idea Board</h1>
       <p>Share activities and upvote your favorites</p>
       <div class="you hidden" id="youBar">
         <span class="badge" id="youBadge"></span>
         <span>You are signed in</span>
         <button onclick="changeInitials()">change</button>
       </div>
-      <div class="sync" id="syncBar"><span class="dot" id="dot"></span><span id="syncText">Connecting…</span></div>
+      <div class="sync" id="syncBar"><span class="dot" id="dot"></span><span id="syncText">Connecting…</span><button class="link-btn" id="refreshBtn" style="margin-left:6px" onclick="manualRefresh()">↻ refresh</button></div>
     </header>
 
     <div class="banner hidden" id="configBanner">
@@ -197,10 +199,10 @@
 
     <form class="card" id="ideaForm">
       <h2>Add an activity</h2>
-      <label for="name">Activity name</label>
-      <input id="name" required placeholder="Mini golf night" />
-      <label for="desc">Description</label>
-      <textarea id="desc" rows="2" placeholder="What's the plan?"></textarea>
+      <label for="activityName">Activity name</label>
+      <input id="activityName" name="activityName" autocomplete="off" required placeholder="Tim Hortons" />
+      <label for="desc">Description (optional)</label>
+      <textarea id="desc" rows="2" placeholder="Coffee and donuts!"></textarea>
       <label for="url">Website (optional)</label>
       <input id="url" type="url" placeholder="https://..." />
       <label for="datetime">Day &amp; time (optional)</label>
@@ -348,7 +350,7 @@
   // ---------- Submit new idea ----------
   document.getElementById("ideaForm").addEventListener("submit", e => {
     e.preventDefault();
-    const name = document.getElementById("name").value.trim();
+    const name = document.getElementById("activityName").value.trim();
     const desc = document.getElementById("desc").value.trim();
     let url = document.getElementById("url").value.trim();
     const datetime = document.getElementById("datetime").value;
@@ -361,8 +363,29 @@
   // ---------- Actions ----------
   function toggleVote(id) { sendAction({ action: "vote", id }); }
   function deleteIdea(id) { if (confirm("Delete this idea and its comments & time suggestions?")) sendAction({ action: "delete", id }); }
-  function toggleCommentSection(id) { openComments[id] = !openComments[id]; render(); }
-  function toggleTimeSection(id) { openTimes[id] = !openTimes[id]; render(); }
+  // Scroll a just-opened idea section fully into view.
+  function scrollSectionIntoView(id, kind) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById((kind === "time" ? "tinput-" : "cinput-") + id);
+      const row = el ? el.closest(".idea") : null;
+      if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (el) {
+        // Make sure the input itself ends up on-screen.
+        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+      }
+    });
+  }
+
+  function toggleCommentSection(id) {
+    openComments[id] = !openComments[id];
+    render();
+    if (openComments[id]) scrollSectionIntoView(id, "comment");
+  }
+  function toggleTimeSection(id) {
+    openTimes[id] = !openTimes[id];
+    render();
+    if (openTimes[id]) scrollSectionIntoView(id, "time");
+  }
   function addComment(id) {
     const input = document.getElementById("cinput-" + id);
     const text = input.value.trim();
@@ -383,6 +406,14 @@
   }
   function voteTime(id) { sendAction({ action: "voteTime", id }); }
   function deleteTime(id) { sendAction({ action: "deleteTime", id }); }
+
+  // When the date picker gains focus, scroll it toward the top of the viewport
+  // so the native calendar (which opens downward) always has room to show fully.
+  function scrollTimeInputUp(id) {
+    const el = document.getElementById("tinput-" + id);
+    if (!el) return;
+    setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
 
   // ---------- Edit ----------
   function openEdit(id) {
@@ -494,7 +525,7 @@
               <h4>Suggested days &amp; times — vote for what works!</h4>
               ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No time suggestions yet.</div>'}
               <div class="time-form">
-                <input id="tinput-${idea.id}" type="datetime-local" />
+                <input id="tinput-${idea.id}" type="datetime-local" onfocus="scrollTimeInputUp('${idea.id}')" />
                 <button class="btn small" onclick="suggestTime('${idea.id}')">Suggest time</button>
               </div>
             </div>` : ""}
@@ -511,8 +542,35 @@
   }
 
   // ---------- Live updating ----------
+  // Don't rebuild the list while the user is typing in one of its inputs,
+  // otherwise re-rendering would blow away the field they're focused in.
+  function isTypingInList() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag !== "INPUT" && tag !== "TEXTAREA") return false;
+    return el.closest("#ideas") !== null;
+  }
+
   async function poll() {
-    if (!busy && !editingId) { await fetchData(); render(); }
+    if (busy || editingId || isTypingInList()) return;
+    await fetchData();
+    render();
+  }
+
+  async function manualRefresh() {
+    const btn = document.getElementById("refreshBtn");
+    if (btn && btn.dataset.busy === "1") return;   // ignore taps mid-refresh
+    const original = btn ? btn.textContent : "";
+    if (btn) { btn.dataset.busy = "1"; btn.textContent = "refreshing…"; }
+    const started = Date.now();
+    await fetchData();
+    render();
+    // keep the message visible briefly so it's noticeable even on fast refreshes
+    const wait = Math.max(0, 500 - (Date.now() - started));
+    setTimeout(() => {
+      if (btn) { btn.textContent = original; btn.dataset.busy = ""; }
+    }, wait);
   }
 
   // ---------- Init ----------
