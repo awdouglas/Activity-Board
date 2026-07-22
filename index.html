@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Idea Board</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-hover: #273449;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #334155;
+    --up: #22c55e;
+    --danger: #ef4444;
+    --time: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, #0f172a, #1e1b4b);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { margin: 0 0 6px; font-size: 2rem; letter-spacing: -0.5px; }
+  header p { margin: 0; color: var(--muted); }
+  .you {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: 999px; font-size: 0.9rem; color: var(--muted);
+  }
+  .you .badge {
+    background: var(--accent); color: #fff; font-weight: 700;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 0.75rem;
+  }
+  .you button, .link-btn {
+    background: none; border: none; color: var(--accent-hover);
+    cursor: pointer; font-size: 0.8rem; text-decoration: underline; padding: 0;
+  }
+  .sync {
+    font-size: 0.72rem; color: var(--muted); margin-top: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); }
+  .dot.off { background: var(--danger); }
+
+  form.card, .idea {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+  }
+  form.card { margin-bottom: 28px; }
+  form.card h2 { margin: 0 0 16px; font-size: 1.15rem; }
+  label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 5px; }
+  input, textarea {
+    width: 100%; background: #0f172a; border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); padding: 11px 13px;
+    font-size: 0.95rem; font-family: inherit; margin-bottom: 14px; resize: vertical;
+  }
+  input[type="datetime-local"] { color-scheme: dark; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 12px 20px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.small { padding: 7px 14px; font-size: 0.85rem; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--text); }
+
+  .list-head { display: flex; justify-content: space-between; align-items: center; margin: 0 4px 12px; }
+  .list-head h2 { margin: 0; font-size: 1.15rem; }
+  .sort { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; }
+
+  .ideas { display: flex; flex-direction: column; gap: 14px; }
+  .idea { display: flex; gap: 16px; align-items: flex-start; transition: background 0.15s; }
+  .idea:hover { background: var(--card-hover); }
+  .vote { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 54px; }
+  .vote button {
+    background: #0f172a; border: 1px solid var(--border); color: var(--muted);
+    width: 44px; height: 40px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; transition: all 0.15s;
+  }
+  .vote button:hover { border-color: var(--up); color: var(--up); }
+  .vote button.voted { background: var(--up); color: #fff; border-color: var(--up); }
+  .vote .count { font-weight: 700; font-size: 1.05rem; }
+  .idea-body { flex: 1; min-width: 0; }
+  .idea-body h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .idea-body p { margin: 0 0 8px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; word-wrap: break-word; }
+  .idea-body a.site { color: var(--accent-hover); text-decoration: none; font-size: 0.88rem; word-break: break-all; }
+  .idea-body a.site:hover { text-decoration: underline; }
+  .when {
+    display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px;
+    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4);
+    color: var(--time); padding: 4px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+  }
+  .meta { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.78rem; color: var(--muted); flex-wrap: wrap; }
+  .chip { background: var(--accent); color: #fff; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; }
+  .voters { display: flex; gap: 4px; flex-wrap: wrap; }
+  .voter { background: #0f172a; border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; font-size: 0.7rem; }
+  .actions { display: flex; gap: 12px; margin-top: 10px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+
+  /* Comments */
+  .comments { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .comment { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; font-size: 0.85rem; }
+  .comment .cchip { background: #0f172a; border: 1px solid var(--border); color: var(--text); font-weight: 700; padding: 2px 7px; border-radius: 6px; font-size: 0.7rem; flex-shrink: 0; }
+  .comment .ctext { color: var(--text); word-wrap: break-word; min-width: 0; }
+  .comment .cdel { color: var(--danger); cursor: pointer; margin-left: auto; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
+  .comment .cdel:hover { opacity: 1; }
+  .comment-form { display: flex; gap: 8px; margin-top: 10px; }
+  .comment-form input { margin: 0; }
+  .toggle { background: none; border: none; color: var(--accent-hover); cursor: pointer; font-size: 0.82rem; padding: 0; margin-top: 10px; margin-right: 16px; }
+
+  /* Time suggestions */
+  .times { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .times h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+  .time-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .time-vote {
+    display: flex; align-items: center; gap: 6px; background: #0f172a;
+    border: 1px solid var(--border); color: var(--muted); border-radius: 8px;
+    padding: 5px 10px; cursor: pointer; transition: all 0.15s; font-size: 0.8rem; flex-shrink: 0;
+  }
+  .time-vote:hover { border-color: var(--time); color: var(--time); }
+  .time-vote.voted { background: var(--time); color: #1f2937; border-color: var(--time); font-weight: 700; }
+  .time-label { font-size: 0.88rem; color: var(--text); flex: 1; min-width: 0; }
+  .time-label .by { color: var(--muted); font-size: 0.75rem; margin-left: 6px; }
+  .time-voters { display: flex; gap: 3px; flex-wrap: wrap; }
+  .time-del { color: var(--danger); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
+  .time-del:hover { opacity: 1; }
+  .best { color: var(--time); font-size: 0.7rem; font-weight: 700; margin-left: 6px; }
+  .time-form { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .time-form input { margin: 0; flex: 1; min-width: 180px; }
+
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 50; padding: 20px; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 340px; max-width: 100%; text-align: center; }
+  .modal.wide { width: 420px; text-align: left; }
+  .modal h2 { margin: 0 0 8px; }
+  .modal p { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
+  #initialsInput { text-align: center; text-transform: uppercase; font-size: 1.4rem; letter-spacing: 4px; }
+  .modal .row { display: flex; gap: 10px; }
+  .hidden { display: none !important; }
+  .banner { background: #7f1d1d; color: #fecaca; padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; text-align: center; }
+</style>
+</head>
+<body>
+  <!-- Initials modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2>Welcome! 👋</h2>
+      <p>Enter your initials so people know who added and voted for ideas.</p>
+      <input id="initialsInput" maxlength="3" placeholder="e.g. AD" />
+      <button class="btn" style="width:100%" onclick="saveInitials()">Let's go</button>
+    </div>
+  </div>
+
+  <!-- Edit modal -->
+  <div class="overlay hidden" id="editOverlay">
+    <div class="modal wide">
+      <h2>Edit idea</h2>
+      <label>Activity name</label>
+      <input id="editName" />
+      <label>Description</label>
+      <textarea id="editDesc" rows="2"></textarea>
+      <label>Website</label>
+      <input id="editUrl" />
+      <label>Day &amp; time</label>
+      <input id="editDatetime" type="datetime-local" />
+      <div class="row">
+        <button class="btn ghost" style="flex:1" onclick="closeEdit()">Cancel</button>
+        <button class="btn" style="flex:1" onclick="submitEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <header>
+      <h1>💡 Idea Board</h1>
+      <p>Share activities and upvote your favorites</p>
+      <div class="you hidden" id="youBar">
+        <span class="badge" id="youBadge"></span>
+        <span>You are signed in</span>
+        <button onclick="changeInitials()">change</button>
+      </div>
+      <div class="sync" id="syncBar"><span class="dot" id="dot"></span><span id="syncText">Connecting…</span></div>
+    </header>
+
+    <div class="banner hidden" id="configBanner">
+      ⚠️ Backend not configured. Open the file and set <b>API_URL</b> (see setup-instructions.md). Running in local-only mode.
+    </div>
+
+    <form class="card" id="ideaForm">
+      <h2>Add an activity</h2>
+      <label for="name">Activity name</label>
+      <input id="name" required placeholder="Mini golf night" />
+      <label for="desc">Description</label>
+      <textarea id="desc" rows="2" placeholder="What's the plan?"></textarea>
+      <label for="url">Website (optional)</label>
+      <input id="url" type="url" placeholder="https://..." />
+      <label for="datetime">Day &amp; time (optional)</label>
+      <input id="datetime" type="datetime-local" />
+      <button class="btn" type="submit" id="submitBtn">Submit idea</button>
+    </form>
+
+    <div class="list-head">
+      <h2>Ideas</h2>
+      <select class="sort" id="sort" onchange="render()">
+        <option value="votes">Most upvoted</option>
+        <option value="new">Newest</option>
+      </select>
+    </div>
+    <div class="ideas" id="ideas"></div>
+  </div>
+
+<script>
+  /* ============================================================
+     CONFIG — paste your Google Apps Script Web App URL here.
+     See setup-instructions.md. Leave "" to run in local mode.
+     ============================================================ */
+  const API_URL = "https://script.google.com/macros/s/AKfycbxj-gWwjgH_I46QqlE1d2WIztEnOTwCTRNhTJPD7vvkicfxkQaYukohZQtjM2PI8Cjm/exec";
+
+  const POLL_MS = 5000;              // live-update interval
+  const STORE_USER = "ideaBoard.initials";
+  const STORE_LOCAL = "ideaBoard.localData";
+
+  let me = localStorage.getItem(STORE_USER) || "";
+  let data = { ideas: [], comments: [], times: [] };
+  let openComments = {};             // ideaId -> bool
+  let openTimes = {};                // ideaId -> bool
+  let editingId = null;
+  let busy = false;
+  const useBackend = !!API_URL;
+
+  // ---------- Local-mode fallback ----------
+  function loadLocal() {
+    data = JSON.parse(localStorage.getItem(STORE_LOCAL) || '{"ideas":[],"comments":[],"times":[]}');
+    if (!data.times) data.times = [];
+  }
+  function saveLocal() { localStorage.setItem(STORE_LOCAL, JSON.stringify(data)); }
+
+  // ---------- Backend calls ----------
+  async function fetchData() {
+    if (!useBackend) { loadLocal(); return; }
+    try {
+      const res = await fetch(API_URL, { method: "GET" });
+      const json = await res.json();
+      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+    } catch (err) { setSync(false); }
+  }
+
+  async function sendAction(payload) {
+    payload.author = me;
+    if (!useBackend) { applyLocal(payload); saveLocal(); render(); return; }
+    busy = true;
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+    } catch (err) { setSync(false); }
+    finally { busy = false; render(); }
+  }
+
+  // Mirror backend logic when no backend is configured.
+  function applyLocal(p) {
+    const rid = () => String(Date.now()) + Math.floor(Math.random()*1000);
+    if (p.action === "add") {
+      data.ideas.push({ id: rid(), name: p.name, desc: p.desc || "", url: p.url || "",
+        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [] });
+    } else if (p.action === "edit") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i && i.author === p.author) { i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; }
+    } else if (p.action === "delete") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i && i.author === p.author) {
+        data.ideas = data.ideas.filter(x => x.id !== p.id);
+        data.comments = data.comments.filter(c => c.ideaId !== p.id);
+        data.times = data.times.filter(t => t.ideaId !== p.id);
+      }
+    } else if (p.action === "vote") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i) { const idx = i.voters.indexOf(p.author); idx === -1 ? i.voters.push(p.author) : i.voters.splice(idx,1); }
+    } else if (p.action === "comment") {
+      data.comments.push({ id: rid(), ideaId: p.ideaId, author: p.author, text: p.text, created: Date.now() });
+    } else if (p.action === "deleteComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c && c.author === p.author) data.comments = data.comments.filter(x => x.id !== p.id);
+    } else if (p.action === "suggestTime") {
+      data.times.push({ id: rid(), ideaId: p.ideaId, author: p.author, datetime: p.datetime, created: Date.now(), voters: [p.author] });
+    } else if (p.action === "voteTime") {
+      const t = data.times.find(x => x.id === p.id);
+      if (t) { const idx = t.voters.indexOf(p.author); idx === -1 ? t.voters.push(p.author) : t.voters.splice(idx,1); }
+    } else if (p.action === "deleteTime") {
+      const t = data.times.find(x => x.id === p.id);
+      if (t && t.author === p.author) data.times = data.times.filter(x => x.id !== p.id);
+    }
+  }
+
+  function setSync(ok) {
+    document.getElementById("dot").className = "dot" + (ok ? "" : " off");
+    document.getElementById("syncText").textContent = useBackend
+      ? (ok ? "Live — synced across devices" : "Offline — retrying…")
+      : "Local mode (this browser only)";
+  }
+
+  // ---------- Format a datetime-local value nicely ----------
+  function formatDateTime(dt) {
+    if (!dt) return "";
+    const d = new Date(dt);
+    if (isNaN(d)) return dt;
+    return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  // ---------- Initials ----------
+  function checkUser() {
+    if (me) {
+      document.getElementById("overlay").classList.add("hidden");
+      document.getElementById("youBar").classList.remove("hidden");
+      document.getElementById("youBadge").textContent = me;
+    } else {
+      document.getElementById("overlay").classList.remove("hidden");
+      document.getElementById("youBar").classList.add("hidden");
+      setTimeout(() => document.getElementById("initialsInput").focus(), 50);
+    }
+  }
+  function saveInitials() {
+    const val = document.getElementById("initialsInput").value.trim().toUpperCase();
+    if (!val) { document.getElementById("initialsInput").focus(); return; }
+    me = val; localStorage.setItem(STORE_USER, me);
+    checkUser(); render();
+  }
+  function changeInitials() {
+    document.getElementById("initialsInput").value = me;
+    document.getElementById("overlay").classList.remove("hidden");
+    setTimeout(() => document.getElementById("initialsInput").select(), 50);
+  }
+  document.getElementById("initialsInput").addEventListener("keydown", e => { if (e.key === "Enter") saveInitials(); });
+
+  // ---------- Submit new idea ----------
+  document.getElementById("ideaForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const name = document.getElementById("name").value.trim();
+    const desc = document.getElementById("desc").value.trim();
+    let url = document.getElementById("url").value.trim();
+    const datetime = document.getElementById("datetime").value;
+    if (!name) return;
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    sendAction({ action: "add", name, desc, url, datetime });
+    e.target.reset();
+  });
+
+  // ---------- Actions ----------
+  function toggleVote(id) { sendAction({ action: "vote", id }); }
+  function deleteIdea(id) { if (confirm("Delete this idea and its comments & time suggestions?")) sendAction({ action: "delete", id }); }
+  function toggleCommentSection(id) { openComments[id] = !openComments[id]; render(); }
+  function toggleTimeSection(id) { openTimes[id] = !openTimes[id]; render(); }
+  function addComment(id) {
+    const input = document.getElementById("cinput-" + id);
+    const text = input.value.trim();
+    if (!text) return;
+    openComments[id] = true;
+    sendAction({ action: "comment", ideaId: id, text });
+    input.value = "";
+  }
+  function deleteComment(id) { sendAction({ action: "deleteComment", id }); }
+
+  function suggestTime(id) {
+    const input = document.getElementById("tinput-" + id);
+    const dt = input.value;
+    if (!dt) return;
+    openTimes[id] = true;
+    sendAction({ action: "suggestTime", ideaId: id, datetime: dt });
+    input.value = "";
+  }
+  function voteTime(id) { sendAction({ action: "voteTime", id }); }
+  function deleteTime(id) { sendAction({ action: "deleteTime", id }); }
+
+  // ---------- Edit ----------
+  function openEdit(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea) return;
+    editingId = id;
+    document.getElementById("editName").value = idea.name;
+    document.getElementById("editDesc").value = idea.desc;
+    document.getElementById("editUrl").value = idea.url;
+    document.getElementById("editDatetime").value = idea.datetime || "";
+    document.getElementById("editOverlay").classList.remove("hidden");
+  }
+  function closeEdit() { editingId = null; document.getElementById("editOverlay").classList.add("hidden"); }
+  function submitEdit() {
+    const name = document.getElementById("editName").value.trim();
+    if (!name) return;
+    let url = document.getElementById("editUrl").value.trim();
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    sendAction({ action: "edit", id: editingId, name,
+      desc: document.getElementById("editDesc").value.trim(), url,
+      datetime: document.getElementById("editDatetime").value });
+    closeEdit();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- Render ----------
+  function render() {
+    const container = document.getElementById("ideas");
+    const sort = document.getElementById("sort").value;
+    let list = [...data.ideas];
+    if (sort === "votes") list.sort((a,b) => b.voters.length - a.voters.length || b.created - a.created);
+    else list.sort((a,b) => b.created - a.created);
+
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty">No ideas yet — be the first to add one!</div>';
+      return;
+    }
+
+    container.innerHTML = list.map(idea => {
+      const voted = idea.voters.includes(me);
+      const mine = idea.author === me;
+      const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
+      const ideaComments = data.comments.filter(c => c.ideaId === idea.id).sort((a,b) => a.created - b.created);
+      const isCOpen = openComments[idea.id];
+
+      // Time suggestions, sorted by votes then chronologically.
+      const ideaTimes = data.times.filter(t => t.ideaId === idea.id)
+        .sort((a,b) => b.voters.length - a.voters.length || new Date(a.datetime) - new Date(b.datetime));
+      const isTOpen = openTimes[idea.id];
+      const maxVotes = ideaTimes.reduce((m,t) => Math.max(m, t.voters.length), 0);
+
+      const commentsHtml = ideaComments.map(c => `
+        <div class="comment">
+          <span class="cchip">${escapeHtml(c.author)}</span>
+          <span class="ctext">${escapeHtml(c.text)}</span>
+          ${c.author === me ? `<span class="cdel" onclick="deleteComment('${c.id}')">delete</span>` : ""}
+        </div>`).join("");
+
+      const timesHtml = ideaTimes.map(t => {
+        const tVoted = t.voters.includes(me);
+        const isBest = maxVotes > 0 && t.voters.length === maxVotes;
+        const tVoters = t.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
+        return `
+          <div class="time-row">
+            <div class="time-vote ${tVoted ? 'voted' : ''}" onclick="voteTime('${t.id}')">
+              👍 <span>${t.voters.length}</span>
+            </div>
+            <div class="time-label">
+              ${escapeHtml(formatDateTime(t.datetime))}
+              ${isBest ? '<span class="best">★ leading</span>' : ''}
+              <span class="by">by ${escapeHtml(t.author)}</span>
+            </div>
+            <div class="time-voters">${tVoters}</div>
+            ${t.author === me ? `<span class="time-del" onclick="deleteTime('${t.id}')">✕</span>` : ""}
+          </div>`;
+      }).join("");
+
+      return `
+        <div class="idea">
+          <div class="vote">
+            <button class="${voted ? 'voted' : ''}" onclick="toggleVote('${idea.id}')" title="Upvote">▲</button>
+            <span class="count">${idea.voters.length}</span>
+          </div>
+          <div class="idea-body">
+            <h3>${escapeHtml(idea.name)}</h3>
+            ${idea.datetime ? `<div class="when">📅 ${escapeHtml(formatDateTime(idea.datetime))}</div>` : ""}
+            ${idea.desc ? `<p>${escapeHtml(idea.desc)}</p>` : ""}
+            ${idea.url ? `<a class="site" href="${escapeHtml(idea.url)}" target="_blank" rel="noopener">${escapeHtml(idea.url)}</a>` : ""}
+            <div class="meta">
+              <span>added by</span><span class="chip">${escapeHtml(idea.author)}</span>
+              ${idea.voters.length ? `<span>· voted by</span><span class="voters">${voterChips}</span>` : ""}
+            </div>
+            ${mine ? `<div class="actions">
+              <button class="link-btn" onclick="openEdit('${idea.id}')">✏️ edit</button>
+              <button class="link-btn" style="color:var(--danger)" onclick="deleteIdea('${idea.id}')">🗑️ delete</button>
+            </div>` : ""}
+            <div>
+              <button class="toggle" onclick="toggleTimeSection('${idea.id}')">
+                🕒 ${ideaTimes.length} time${ideaTimes.length === 1 ? "" : "s"} suggested ${isTOpen ? "▲" : "▼"}
+              </button>
+              <button class="toggle" onclick="toggleCommentSection('${idea.id}')">
+                💬 ${ideaComments.length} comment${ideaComments.length === 1 ? "" : "s"} ${isCOpen ? "▲" : "▼"}
+              </button>
+            </div>
+            ${isTOpen ? `<div class="times">
+              <h4>Suggested days &amp; times — vote for what works!</h4>
+              ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No time suggestions yet.</div>'}
+              <div class="time-form">
+                <input id="tinput-${idea.id}" type="datetime-local" />
+                <button class="btn small" onclick="suggestTime('${idea.id}')">Suggest time</button>
+              </div>
+            </div>` : ""}
+            ${isCOpen ? `<div class="comments">
+              ${commentsHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No comments yet.</div>'}
+              <div class="comment-form">
+                <input id="cinput-${idea.id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')addComment('${idea.id}')" />
+                <button class="btn small" onclick="addComment('${idea.id}')">Post</button>
+              </div>
+            </div>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  // ---------- Live updating ----------
+  async function poll() {
+    if (!busy && !editingId) { await fetchData(); render(); }
+  }
+
+  // ---------- Init ----------
+  async function init() {
+    if (!useBackend) document.getElementById("configBanner").classList.remove("hidden");
+    setSync(false);
+    checkUser();
+    await fetchData();
+    render();
+    setInterval(poll, POLL_MS);
+  }
+  init();
+</script>
+</body>
+</html>
