@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Activity Idea Board</title>
+<title>Montreal Idea Board</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -65,7 +65,13 @@
     border-radius: 10px; color: var(--text); padding: 11px 13px;
     font-size: 0.95rem; font-family: inherit; margin-bottom: 14px; resize: vertical;
   }
-  input[type="datetime-local"] { color-scheme: dark; }
+  input[type="date"], input[type="time"], input[type="datetime-local"] { color-scheme: dark; }
+  /* Merged date+time control — looks like one field; time is disabled until a date is set */
+  .dt-merged { display:flex; align-items:center; background:#0f172a; border:1px solid var(--border); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .dt-merged:focus-within { outline:2px solid var(--accent); }
+  .dt-merged input { border:none; background:transparent; margin:0; border-radius:0; flex:1; min-width:0; }
+  .dt-merged .divider { width:1px; align-self:stretch; background:var(--border); }
+  .dt-merged input[type="time"]:disabled { opacity:0.4; cursor:not-allowed; }
   input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .btn {
     background: var(--accent); color: #fff; border: none; border-radius: 10px;
@@ -93,7 +99,7 @@
   .vote .count { font-weight: 700; font-size: 1.05rem; }
   .idea-body { flex: 1; min-width: 0; }
   .idea-body h3 { margin: 0 0 4px; font-size: 1.05rem; }
-  .idea-body p { margin: 0 0 8px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; word-wrap: break-word; }
+  .idea-body p { margin: 0 0 8px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; word-wrap: break-word; white-space: pre-wrap; }
   .idea-body a.site { color: var(--accent-hover); text-decoration: none; font-size: 0.88rem; word-break: break-all; }
   .idea-body a.site:hover { text-decoration: underline; }
   .when {
@@ -112,11 +118,19 @@
   .comments { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
   .comment { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; font-size: 0.85rem; }
   .comment .cchip { background: #0f172a; border: 1px solid var(--border); color: var(--text); font-weight: 700; padding: 2px 7px; border-radius: 6px; font-size: 0.7rem; flex-shrink: 0; }
-  .comment .ctext { color: var(--text); word-wrap: break-word; min-width: 0; }
-  .comment .cdel { color: var(--danger); cursor: pointer; margin-left: auto; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
+  .comment .ctext { color: var(--text); word-wrap: break-word; min-width: 0; white-space: pre-wrap; }
+  .inline-link { color: var(--accent-hover); text-decoration: underline; word-break: break-all; }
+  .inline-link:hover { color: var(--accent); }
+  .comment .cedited { color: var(--muted); font-size: 0.68rem; font-style: italic; margin-left: 6px; white-space: nowrap; }
+  .comment .cdel { color: var(--danger); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
   .comment .cdel:hover { opacity: 1; }
-  .comment-form { display: flex; gap: 8px; margin-top: 10px; }
-  .comment-form input { margin: 0; }
+  .comment .cedit { color: var(--accent-hover); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; margin-left: auto; }
+  .comment .cedit:hover { opacity: 1; }
+  .comment .cedit-box { flex: 1; min-width: 0; }
+  .comment .cedit-box textarea { margin: 0 0 6px; font-size: 0.85rem; }
+  .comment .cedit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .comment-form { display: flex; gap: 8px; margin-top: 10px; align-items: flex-start; }
+  .comment-form textarea { margin: 0; min-height: 40px; }
   .toggle { background: none; border: none; color: var(--accent-hover); cursor: pointer; font-size: 0.82rem; padding: 0; margin-top: 10px; margin-right: 16px; }
 
   /* Time suggestions */
@@ -172,8 +186,12 @@
       <textarea id="editDesc" rows="2"></textarea>
       <label>Website</label>
       <input id="editUrl" />
-      <label>Day &amp; time</label>
-      <input id="editDatetime" type="datetime-local" />
+      <label>Day &amp; time (enter either or both)</label>
+      <div class="dt-merged">
+        <input id="editDate" type="date" />
+        <div class="divider"></div>
+        <input id="editTime" type="time" />
+      </div>
       <div class="row">
         <button class="btn ghost" style="flex:1" onclick="closeEdit()">Cancel</button>
         <button class="btn" style="flex:1" onclick="submitEdit()">Save</button>
@@ -183,8 +201,8 @@
 
   <div class="wrap">
     <header>
-      <h1>Activity Idea Board</h1>
-      <p>Share activities and upvote your favorites</p>
+      <h1>Montreal Idea Board</h1>
+      <p>Sun Oct 11 - Thu Oct 15</p>
       <div class="you hidden" id="youBar">
         <span class="badge" id="youBadge"></span>
         <span>You are signed in</span>
@@ -205,8 +223,12 @@
       <textarea id="desc" rows="2" placeholder="Coffee and donuts!"></textarea>
       <label for="url">Website (optional)</label>
       <input id="url" type="url" placeholder="https://..." />
-      <label for="datetime">Day &amp; time (optional)</label>
-      <input id="datetime" type="datetime-local" />
+      <label for="ideaDate">Day &amp; time (optional — enter either or both)</label>
+      <div class="dt-merged">
+        <input id="ideaDate" type="date" />
+        <div class="divider"></div>
+        <input id="ideaTime" type="time" />
+      </div>
       <button class="btn" type="submit" id="submitBtn">Submit idea</button>
     </form>
 
@@ -236,7 +258,9 @@
   let openComments = {};             // ideaId -> bool
   let openTimes = {};                // ideaId -> bool
   let editingId = null;
+  let editingComment = null;         // comment id currently being edited inline
   let busy = false;
+  let writeSeq = 0;                  // bumps on every write; guards against stale polls
   const useBackend = !!API_URL;
 
   // ---------- Local-mode fallback ----------
@@ -249,17 +273,25 @@
   // ---------- Backend calls ----------
   async function fetchData() {
     if (!useBackend) { loadLocal(); return; }
+    const seqAtStart = writeSeq;
     try {
       const res = await fetch(API_URL, { method: "GET" });
       const json = await res.json();
+      // Discard this snapshot if a write happened while it was in flight —
+      // otherwise stale server data would briefly clobber our optimistic update.
+      if (writeSeq !== seqAtStart || busy) return;
       if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
     } catch (err) { setSync(false); }
   }
 
   async function sendAction(payload) {
     payload.author = me;
-    if (!useBackend) { applyLocal(payload); saveLocal(); render(); return; }
+    // Apply the change locally right away so the UI responds instantly (optimistic).
+    applyLocal(payload);
+    render();
+    if (!useBackend) { saveLocal(); return; }
     busy = true;
+    writeSeq++;                      // invalidates any poll fetch already in flight
     try {
       const res = await fetch(API_URL, {
         method: "POST",
@@ -267,6 +299,8 @@
         body: JSON.stringify(payload)
       });
       const json = await res.json();
+      // Replace with the authoritative server state (reconciles our optimistic change
+      // and merges in anything other users did in the meantime).
       if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
     } catch (err) { setSync(false); }
     finally { busy = false; render(); }
@@ -296,6 +330,9 @@
     } else if (p.action === "deleteComment") {
       const c = data.comments.find(x => x.id === p.id);
       if (c && c.author === p.author) data.comments = data.comments.filter(x => x.id !== p.id);
+    } else if (p.action === "editComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c && c.author === p.author) { c.text = p.text; c.edited = true; }
     } else if (p.action === "suggestTime") {
       data.times.push({ id: rid(), ideaId: p.ideaId, author: p.author, datetime: p.datetime, created: Date.now(), voters: [p.author] });
     } else if (p.action === "voteTime") {
@@ -314,12 +351,36 @@
       : "Local mode (this browser only)";
   }
 
-  // ---------- Format a datetime-local value nicely ----------
+  // ---------- Format / parse flexible date-time ----------
+  // Stored formats:  "YYYY-MM-DDTHH:MM" (both) · "YYYY-MM-DD" (date only) · "HH:MM" (time only)
   function formatDateTime(dt) {
     if (!dt) return "";
-    const d = new Date(dt);
+    if (/^\d{1,2}:\d{2}$/.test(dt)) {                     // time only
+      const d = new Date("2000-01-01T" + dt);
+      return isNaN(d) ? dt : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) {                 // date only
+      const d = new Date(dt + "T00:00");
+      return isNaN(d) ? dt : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    }
+    const d = new Date(dt);                               // both date + time
     if (isNaN(d)) return dt;
     return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  // Combine separate date + time fields into one stored string.
+  function combineDateTime(date, time) {
+    if (date && time) return date + "T" + time;
+    if (date) return date;          // date only
+    if (time) return time;          // time only
+    return "";
+  }
+  // Split a stored string back into { date, time } for editing.
+  function splitDateTime(dt) {
+    if (!dt) return { date: "", time: "" };
+    if (/^\d{1,2}:\d{2}$/.test(dt)) return { date: "", time: dt };
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) return { date: dt, time: "" };
+    const parts = dt.split("T");
+    return { date: parts[0] || "", time: parts[1] || "" };
   }
 
   // ---------- Initials ----------
@@ -353,7 +414,7 @@
     const name = document.getElementById("activityName").value.trim();
     const desc = document.getElementById("desc").value.trim();
     let url = document.getElementById("url").value.trim();
-    const datetime = document.getElementById("datetime").value;
+    const datetime = combineDateTime(document.getElementById("ideaDate").value, document.getElementById("ideaTime").value);
     if (!name) return;
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
     sendAction({ action: "add", name, desc, url, datetime });
@@ -391,18 +452,39 @@
     const text = input.value.trim();
     if (!text) return;
     openComments[id] = true;
+    input.value = "";              // clear before send/re-render so the box empties
+    input.blur();
     sendAction({ action: "comment", ideaId: id, text });
-    input.value = "";
   }
   function deleteComment(id) { sendAction({ action: "deleteComment", id }); }
 
+  function startEditComment(id) {
+    editingComment = id;
+    render();
+    requestAnimationFrame(() => {
+      const el = document.getElementById("cedit-" + id);
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    });
+  }
+  function cancelEditComment() { editingComment = null; render(); }
+  function saveEditComment(id) {
+    const el = document.getElementById("cedit-" + id);
+    if (!el) return;
+    const text = el.value.trim();
+    editingComment = null;
+    if (!text) return;   // empty edit: just cancel (use delete to remove)
+    sendAction({ action: "editComment", id, text });
+  }
+
   function suggestTime(id) {
-    const input = document.getElementById("tinput-" + id);
-    const dt = input.value;
+    const dateEl = document.getElementById("tdate-" + id);
+    const timeEl = document.getElementById("ttime-" + id);
+    const dt = combineDateTime(dateEl.value, timeEl.value);
     if (!dt) return;
     openTimes[id] = true;
+    dateEl.value = ""; timeEl.value = "";   // clear before send/re-render
+    dateEl.blur(); timeEl.blur();
     sendAction({ action: "suggestTime", ideaId: id, datetime: dt });
-    input.value = "";
   }
   function voteTime(id) { sendAction({ action: "voteTime", id }); }
   function deleteTime(id) { sendAction({ action: "deleteTime", id }); }
@@ -410,7 +492,7 @@
   // When the date picker gains focus, scroll it toward the top of the viewport
   // so the native calendar (which opens downward) always has room to show fully.
   function scrollTimeInputUp(id) {
-    const el = document.getElementById("tinput-" + id);
+    const el = document.getElementById("tdate-" + id);
     if (!el) return;
     setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   }
@@ -423,7 +505,9 @@
     document.getElementById("editName").value = idea.name;
     document.getElementById("editDesc").value = idea.desc;
     document.getElementById("editUrl").value = idea.url;
-    document.getElementById("editDatetime").value = idea.datetime || "";
+    const parts = splitDateTime(idea.datetime || "");
+    document.getElementById("editDate").value = parts.date;
+    document.getElementById("editTime").value = parts.time;
     document.getElementById("editOverlay").classList.remove("hidden");
   }
   function closeEdit() { editingId = null; document.getElementById("editOverlay").classList.add("hidden"); }
@@ -434,12 +518,26 @@
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
     sendAction({ action: "edit", id: editingId, name,
       desc: document.getElementById("editDesc").value.trim(), url,
-      datetime: document.getElementById("editDatetime").value });
+      datetime: combineDateTime(document.getElementById("editDate").value, document.getElementById("editTime").value) });
     closeEdit();
   }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Escape text, then turn URLs (and bare www. links) into clickable anchors.
+  // Escaping happens first so this stays safe against injected HTML.
+  function linkify(s) {
+    const escaped = escapeHtml(s);
+    return escaped.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi, match => {
+      // Don't let trailing punctuation get swallowed into the link.
+      const trailing = match.match(/[.,!?;:)]+$/);
+      let urlPart = match, tail = "";
+      if (trailing) { urlPart = match.slice(0, -trailing[0].length); tail = trailing[0]; }
+      const href = /^https?:\/\//i.test(urlPart) ? urlPart : "https://" + urlPart;
+      return `<a class="inline-link" href="${href}" target="_blank" rel="noopener">${urlPart}</a>${tail}`;
+    });
   }
 
   // ---------- Render ----------
@@ -451,11 +549,11 @@
     else list.sort((a,b) => b.created - a.created);
 
     if (list.length === 0) {
-      container.innerHTML = '<div class="empty">No ideas yet — be the first to add one!</div>';
+      commitHTML(container, '<div class="empty">No ideas yet — be the first to add one!</div>');
       return;
     }
 
-    container.innerHTML = list.map(idea => {
+    const html = list.map(idea => {
       const voted = idea.voters.includes(me);
       const mine = idea.author === me;
       const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
@@ -468,12 +566,27 @@
       const isTOpen = openTimes[idea.id];
       const maxVotes = ideaTimes.reduce((m,t) => Math.max(m, t.voters.length), 0);
 
-      const commentsHtml = ideaComments.map(c => `
+      const commentsHtml = ideaComments.map(c => {
+        if (editingComment === c.id) {
+          return `
+        <div class="comment editing">
+          <span class="cchip">${escapeHtml(c.author)}</span>
+          <div class="cedit-box">
+            <textarea id="cedit-${c.id}" rows="2">${escapeHtml(c.text)}</textarea>
+            <div class="cedit-actions">
+              <button class="btn small ghost" onclick="cancelEditComment()">Cancel</button>
+              <button class="btn small" onclick="saveEditComment('${c.id}')">Save</button>
+            </div>
+          </div>
+        </div>`;
+        }
+        return `
         <div class="comment">
           <span class="cchip">${escapeHtml(c.author)}</span>
-          <span class="ctext">${escapeHtml(c.text)}</span>
-          ${c.author === me ? `<span class="cdel" onclick="deleteComment('${c.id}')">delete</span>` : ""}
-        </div>`).join("");
+          <span class="ctext">${linkify(c.text)}${c.edited ? '<span class="cedited">(edited)</span>' : ''}</span>
+          ${c.author === me ? `<span class="cedit" onclick="startEditComment('${c.id}')">edit</span><span class="cdel" onclick="deleteComment('${c.id}')">delete</span>` : ""}
+        </div>`;
+      }).join("");
 
       const timesHtml = ideaTimes.map(t => {
         const tVoted = t.voters.includes(me);
@@ -502,16 +615,16 @@
           </div>
           <div class="idea-body">
             <h3>${escapeHtml(idea.name)}</h3>
-            ${idea.datetime ? `<div class="when">📅 ${escapeHtml(formatDateTime(idea.datetime))}</div>` : ""}
-            ${idea.desc ? `<p>${escapeHtml(idea.desc)}</p>` : ""}
+            ${idea.datetime ? `<div class="when"> ${escapeHtml(formatDateTime(idea.datetime))}</div>` : ""}
+            ${idea.desc ? `<p>${linkify(idea.desc)}</p>` : ""}
             ${idea.url ? `<a class="site" href="${escapeHtml(idea.url)}" target="_blank" rel="noopener">${escapeHtml(idea.url)}</a>` : ""}
             <div class="meta">
-              <span>added by</span><span class="chip">${escapeHtml(idea.author)}</span>
-              ${idea.voters.length ? `<span>· voted by</span><span class="voters">${voterChips}</span>` : ""}
+              <span>Added by</span><span class="chip">${escapeHtml(idea.author)}</span>
+              ${idea.voters.length ? `<span>· Voted by</span><span class="voters">${voterChips}</span>` : ""}
             </div>
             ${mine ? `<div class="actions">
-              <button class="link-btn" onclick="openEdit('${idea.id}')">✏️ edit</button>
-              <button class="link-btn" style="color:var(--danger)" onclick="deleteIdea('${idea.id}')">🗑️ delete</button>
+              <button class="link-btn" onclick="openEdit('${idea.id}')">✎ Edit</button>
+              <button class="link-btn" style="color:var(--danger)" onclick="deleteIdea('${idea.id}')">🗑 Delete</button>
             </div>` : ""}
             <div>
               <button class="toggle" onclick="toggleTimeSection('${idea.id}')">
@@ -522,38 +635,84 @@
               </button>
             </div>
             ${isTOpen ? `<div class="times">
-              <h4>Suggested days &amp; times — vote for what works!</h4>
+              <h4>Suggested days &amp; times</h4>
               ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No time suggestions yet.</div>'}
               <div class="time-form">
-                <input id="tinput-${idea.id}" type="datetime-local" onfocus="scrollTimeInputUp('${idea.id}')" />
+                <div class="dt-merged" style="flex:1; margin:0;">
+                  <input id="tdate-${idea.id}" type="date" onfocus="scrollTimeInputUp('${idea.id}')" />
+                  <div class="divider"></div>
+                  <input id="ttime-${idea.id}" type="time" onfocus="scrollTimeInputUp('${idea.id}')" />
+                </div>
                 <button class="btn small" onclick="suggestTime('${idea.id}')">Suggest time</button>
               </div>
             </div>` : ""}
             ${isCOpen ? `<div class="comments">
               ${commentsHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No comments yet.</div>'}
               <div class="comment-form">
-                <input id="cinput-${idea.id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')addComment('${idea.id}')" />
+                <textarea id="cinput-${idea.id}" rows="1" placeholder="Add a comment!"></textarea>
                 <button class="btn small" onclick="addComment('${idea.id}')">Post</button>
               </div>
             </div>` : ""}
           </div>
         </div>`;
     }).join("");
+
+    commitHTML(container, html);
+  }
+
+  // ---------- Smart DOM commit ----------
+  // Rebuilds the list ONLY when the HTML actually changed, and preserves the
+  // user's focus, caret position, and any unsent text in comment / time inputs.
+  // This is what lets other people's updates appear live without disrupting
+  // whatever the current user is typing (Google-Docs style).
+  let lastHTML = "";
+  function commitHTML(container, html) {
+    if (html === lastHTML) return;   // nothing changed — don't touch the DOM at all
+
+    // Capture the currently focused list input (if any) so we can restore it.
+    const active = document.activeElement;
+    let focusInfo = null;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && active.closest("#ideas")) {
+      focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
+    }
+
+    // Preserve any unsent text the user has typed into comment / time boxes.
+    const drafts = {};
+    container.querySelectorAll("input, textarea").forEach(el => {
+      if (el.id && el.value) drafts[el.id] = el.value;
+    });
+
+    lastHTML = html;
+    container.innerHTML = html;
+
+    // Restore drafts.
+    Object.keys(drafts).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = drafts[id];
+    });
+
+    // Restore focus + caret.
+    if (focusInfo) {
+      const el = document.getElementById(focusInfo.id);
+      if (el) {
+        el.focus();
+        try { el.setSelectionRange(focusInfo.start, focusInfo.end); } catch (e) {}
+      }
+    }
   }
 
   // ---------- Live updating ----------
-  // Don't rebuild the list while the user is typing in one of its inputs,
-  // otherwise re-rendering would blow away the field they're focused in.
-  function isTypingInList() {
+  // Thanks to commitHTML() preserving focus, caret and drafts, we can now pull
+  // live updates even while the user is typing a comment or new idea.
+  // The ONE thing we can't safely rebuild through is an OPEN native date-picker
+  // (a DOM replace can't reopen the calendar), so we pause only for that.
+  function datePickerFocused() {
     const el = document.activeElement;
-    if (!el) return false;
-    const tag = el.tagName;
-    if (tag !== "INPUT" && tag !== "TEXTAREA") return false;
-    return el.closest("#ideas") !== null;
+    return el && (el.type === "datetime-local" || el.type === "date" || el.type === "time") && el.closest("#ideas") !== null;
   }
 
   async function poll() {
-    if (busy || editingId || isTypingInList()) return;
+    if (busy || editingId || editingComment || datePickerFocused()) return;
     await fetchData();
     render();
   }
