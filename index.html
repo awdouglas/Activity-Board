@@ -635,14 +635,6 @@
     panel.classList.toggle("hidden");
     if (!panel.classList.contains("hidden")) {
       renderTagPicker("filterTagPicker", filters.tags);
-      // Default the day filter to the start of the trip range so its calendar opens
-      // on the trip month (with the week enabled and everything else grayed out),
-      // matching the entry pickers. Only sets a default if no day filter is active.
-      const dayEl = document.getElementById("filterDay");
-      if (!filters.day) {
-        dayEl.value = TRIP_START;
-        onFilterInput();
-      }
     }
   }
   function onFilterInput() {
@@ -1065,10 +1057,28 @@
     document.querySelectorAll('input[type="date"]').forEach(el => {
       el.min = TRIP_START;
       el.max = TRIP_END;
-      // Default the entry pickers to the trip start so their calendar opens on the
-      // trip month. The filter picker is handled in toggleFilterPanel() instead, so
-      // that "Clear all filters" can leave it empty (showing all days).
-      if (el.id !== "filterDay" && !el.value) el.value = TRIP_START;
+      // Prime the calendar to open on the trip month WITHOUT auto-selecting a day.
+      // (Attach handlers once per element.)
+      if (!el.dataset.primeWired) {
+        el.dataset.primeWired = "1";
+        el.addEventListener("focus", () => {
+          // Seed with the trip start only to position the calendar; mark it so we
+          // can revert on blur if the user never actually commits a pick.
+          if (!el.value) { el.value = TRIP_START; el.dataset.primed = "1"; }
+        });
+        el.addEventListener("change", () => {
+          // A real selection — the value sticks, so drop the primed mark.
+          delete el.dataset.primed;
+        });
+        el.addEventListener("blur", () => {
+          // Left without picking anything → restore the blank state.
+          if (el.dataset.primed) {
+            el.value = "";
+            delete el.dataset.primed;
+            if (el.id === "filterDay") onFilterInput();
+          }
+        });
+      }
     });
   }
 
