@@ -349,6 +349,15 @@
      ============================================================ */
   const API_URL = "https://script.google.com/macros/s/AKfycbxj-gWwjgH_I46QqlE1d2WIztEnOTwCTRNhTJPD7vvkicfxkQaYukohZQtjM2PI8Cjm/exec";
 
+  /* ============================================================
+     TRIP DATE RANGE — the only dates users can pick.
+     To re-purpose this board for a different trip, just change
+     these two dates (format: "YYYY-MM-DD"). All date pickers
+     (add idea, edit, suggest time, filter) are limited to this range.
+     ============================================================ */
+  const TRIP_START = "2026-10-11";   // Sunday, October 11, 2026
+  const TRIP_END   = "2026-10-17";   // Saturday, October 17, 2026
+
   const POLL_MS = 5000;              // live-update interval
   const STORE_USER = "ideaBoard.initials";
   const STORE_LOCAL = "ideaBoard.localData";
@@ -953,6 +962,7 @@
     }).join("");
 
     commitHTML(container, html);
+    applyDateLimits();
   }
 
   // ---------- Smart DOM commit ----------
@@ -1028,6 +1038,16 @@
   }
 
   // ---------- Init ----------
+  // Constrain every date input to the trip range (TRIP_START..TRIP_END).
+  // Called on init and after each render, since some date inputs (suggest-time)
+  // are recreated whenever the ideas list re-renders.
+  function applyDateLimits() {
+    document.querySelectorAll('input[type="date"]').forEach(el => {
+      el.min = TRIP_START;
+      el.max = TRIP_END;
+    });
+  }
+
   async function init() {
     if (!useBackend) document.getElementById("configBanner").classList.remove("hidden");
     setSync(false);
@@ -1035,6 +1055,7 @@
     await fetchData();
     render();
     renderTagPicker("ideaTagPicker", ideaTagSel);
+    applyDateLimits();
     setInterval(poll, POLL_MS);
   }
   init();
