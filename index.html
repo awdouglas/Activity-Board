@@ -1041,10 +1041,16 @@
   // Constrain every date input to the trip range (TRIP_START..TRIP_END).
   // Called on init and after each render, since some date inputs (suggest-time)
   // are recreated whenever the ideas list re-renders.
+  // We also default empty entry pickers to TRIP_START so the native calendar
+  // reliably OPENS on the trip month across all browsers — otherwise many
+  // browsers open on today's month (outside the range) and the graying/limits
+  // aren't visible until the user manually navigates to October 2026.
   function applyDateLimits() {
     document.querySelectorAll('input[type="date"]').forEach(el => {
       el.min = TRIP_START;
       el.max = TRIP_END;
+      // Skip the filter picker (a default value there would auto-apply a filter).
+      if (el.id !== "filterDay" && !el.value) el.value = TRIP_START;
     });
   }
 
