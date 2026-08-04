@@ -206,17 +206,20 @@
   .chk input { width: auto; margin: 0; }
 
   /* Mobile tweaks */
-  @media (max-width: 500px) {
+  @media (max-width: 540px) {
     /* Stack the two filter inputs so the date box can't overflow its panel */
     .filter-panel .inline { flex-direction: column; }
-    /* Never let inputs push past their container */
-    .filter-panel input, .filter-panel select { width: 100%; max-width: 100%; }
-    /* Let the date + time boxes shrink so both fit side by side */
+    .filter-panel .inline > div { min-width: 0; width: 100%; }
+    /* Never let text/date inputs push past their container */
+    .filter-panel input, .filter-panel select { width: 100%; max-width: 100%; min-width: 0; }
+    /* ...but the starred checkbox must stay small and inline with its label text */
+    .filter-panel .chk { width: 100%; flex-wrap: nowrap; }
+    .filter-panel .chk input { width: auto; max-width: none; flex: none; }
+    /* Suggest-time: let the button wrap below so date + time get the full row width */
+    .time-form { flex-wrap: wrap; }
+    .time-form .dt-merged { flex-basis: 100%; min-width: 0; }
+    .time-form > .btn { width: 100%; }
     .dt-merged input { min-width: 0; font-size: 0.85rem; padding: 11px 6px; }
-    .time-form input { min-width: 0; }
-    /* Keep the suggest-time row on one line: merged inputs shrink, button stays */
-    .time-form { flex-wrap: nowrap; }
-    .time-form .dt-merged { min-width: 0; }
   }
 </style>
 </head>
