@@ -212,6 +212,12 @@
     .filter-panel .inline > div { min-width: 0; width: 100%; }
     /* Never let text/date inputs push past their container */
     .filter-panel input, .filter-panel select { width: 100%; max-width: 100%; min-width: 0; }
+    /* iOS date/time inputs have an intrinsic min-width that ignores width:100% —
+       removing the native appearance lets them shrink to fit the container. */
+    .filter-panel input[type="date"], .filter-panel input[type="time"],
+    .dt-merged input[type="date"], .dt-merged input[type="time"] {
+      -webkit-appearance: none; appearance: none;
+    }
     /* ...but the starred checkbox must stay small and inline with its label text */
     .filter-panel .chk { width: 100%; flex-wrap: nowrap; }
     .filter-panel .chk input { width: auto; max-width: none; flex: none; }
@@ -720,12 +726,14 @@
   function voteTime(id) { sendAction({ action: "voteTime", id }); }
   function deleteTime(id) { sendAction({ action: "deleteTime", id }); }
 
-  // When the date picker gains focus, scroll it toward the top of the viewport
-  // so the native calendar (which opens downward) always has room to show fully.
+  // When the date picker gains focus, scroll the whole idea card to the top of the
+  // viewport so both inputs (and the native calendar that opens downward) stay in frame.
   function scrollTimeInputUp(id) {
     const el = document.getElementById("tdate-" + id);
-    if (!el) return;
-    setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    const row = el ? el.closest(".idea") : null;
+    const target = row || el;
+    if (!target) return;
+    setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   }
 
   // ---------- Edit ----------
