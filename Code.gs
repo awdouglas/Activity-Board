@@ -21,13 +21,13 @@ function getSheet(name, headers) {
 }
 
 function ideasSheet() {
-  return getSheet(IDEAS_SHEET, ["id", "name", "desc", "url", "datetime", "author", "created", "voters", "tags"]);
+  return getSheet(IDEAS_SHEET, ["id", "name", "desc", "url", "datetime", "author", "created", "voters", "tags", "endtime"]);
 }
 function commentsSheet() {
   return getSheet(COMMENTS_SHEET, ["id", "ideaId", "author", "text", "created", "edited", "voters"]);
 }
 function timesSheet() {
-  return getSheet(TIMES_SHEET, ["id", "ideaId", "author", "datetime", "created", "voters"]);
+  return getSheet(TIMES_SHEET, ["id", "ideaId", "author", "datetime", "created", "voters", "endtime", "reservation"]);
 }
 
 /** Read everything and return as JSON. */
@@ -50,7 +50,8 @@ function readAll() {
       author: String(row[5] || ""),
       created: Number(row[6]) || 0,
       voters: votersRaw ? votersRaw.split(",").map(s => s.trim()).filter(Boolean) : [],
-      tags: String(row[8] || "").split(",").map(s => s.trim()).filter(Boolean)
+      tags: String(row[8] || "").split(",").map(s => s.trim()).filter(Boolean),
+      endtime: String(row[9] || "")
     });
   }
 
@@ -81,7 +82,9 @@ function readAll() {
       author: String(row[2] || ""),
       datetime: cellToDateTimeString(row[3]),
       created: Number(row[4]) || 0,
-      voters: votersRaw ? votersRaw.split(",").map(s => s.trim()).filter(Boolean) : []
+      voters: votersRaw ? votersRaw.split(",").map(s => s.trim()).filter(Boolean) : [],
+      endtime: String(row[6] || ""),
+      reservation: String(row[7] || "") === "1"
     });
   }
 
@@ -151,9 +154,10 @@ function doPost(e) {
     if (action === "add") {
       const sheet = ideasSheet();
       const id = String(Date.now()) + Math.floor(Math.random() * 1000);
-      sheet.appendRow([id, data.name, data.desc || "", data.url || "", "", data.author, Date.now(), "", data.tags || ""]);
+      sheet.appendRow([id, data.name, data.desc || "", data.url || "", "", data.author, Date.now(), "", data.tags || "", ""]);
       // Store datetime as text so Sheets doesn't convert a date-only value to midnight.
       writeText(sheet, sheet.getLastRow(), 5, data.datetime || "");
+      writeText(sheet, sheet.getLastRow(), 10, data.endtime || "");
     }
 
     else if (action === "edit") {
@@ -165,6 +169,7 @@ function doPost(e) {
         sheet.getRange(row, 4).setValue(data.url || "");
         writeText(sheet, row, 5, data.datetime || "");
         sheet.getRange(row, 9).setValue(data.tags || "");
+        writeText(sheet, row, 10, data.endtime || "");
       }
     }
 
@@ -224,9 +229,22 @@ function doPost(e) {
       const sheet = timesSheet();
       const id = String(Date.now()) + Math.floor(Math.random() * 1000);
       // Suggester automatically votes for their own suggestion.
-      sheet.appendRow([id, data.ideaId, data.author, "", Date.now(), data.author]);
+      sheet.appendRow([id, data.ideaId, data.author, "", Date.now(), data.author, "", data.reservation ? "1" : ""]);
       // Store datetime as text so Sheets doesn't convert a date-only value to midnight.
       writeText(sheet, sheet.getLastRow(), 4, data.datetime || "");
+      writeText(sheet, sheet.getLastRow(), 7, data.endtime || "");
+    }
+
+    else if (action === "editTime") {
+      // Only the original suggester may edit their time suggestion (e.g. to toggle
+      // "Reservation Made" or adjust the time).
+      const sheet = timesSheet();
+      const row = findRow(sheet, data.id);
+      if (row > 0 && String(sheet.getRange(row, 3).getValue()) === data.author) {
+        writeText(sheet, row, 4, data.datetime || "");
+        writeText(sheet, row, 7, data.endtime || "");
+        sheet.getRange(row, 8).setValue(data.reservation ? "1" : "");
+      }
     }
 
     else if (action === "voteTime") {
