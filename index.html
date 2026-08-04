@@ -558,6 +558,12 @@
     if (key === lastKnownTagsKey) return;
     lastKnownTagsKey = key;
     renderTagPicker("ideaTagPicker", ideaTagSel);
+    // Also keep the filter's tag picker in sync while it's open, so newly added or
+    // removed tags appear without having to close and reopen the filter panel.
+    const panel = document.getElementById("filterPanel");
+    if (panel && !panel.classList.contains("hidden")) {
+      renderTagPicker("filterTagPicker", filters.tags);
+    }
   }
 
   // Render a tag picker with clickable chips + a "+ custom" button.
@@ -627,7 +633,17 @@
   function toggleFilterPanel() {
     const panel = document.getElementById("filterPanel");
     panel.classList.toggle("hidden");
-    if (!panel.classList.contains("hidden")) renderTagPicker("filterTagPicker", filters.tags);
+    if (!panel.classList.contains("hidden")) {
+      renderTagPicker("filterTagPicker", filters.tags);
+      // Default the day filter to the start of the trip range so its calendar opens
+      // on the trip month (with the week enabled and everything else grayed out),
+      // matching the entry pickers. Only sets a default if no day filter is active.
+      const dayEl = document.getElementById("filterDay");
+      if (!filters.day) {
+        dayEl.value = TRIP_START;
+        onFilterInput();
+      }
+    }
   }
   function onFilterInput() {
     filters.author = document.getElementById("filterAuthor").value.trim().toUpperCase();
@@ -1049,7 +1065,9 @@
     document.querySelectorAll('input[type="date"]').forEach(el => {
       el.min = TRIP_START;
       el.max = TRIP_END;
-      // Skip the filter picker (a default value there would auto-apply a filter).
+      // Default the entry pickers to the trip start so their calendar opens on the
+      // trip month. The filter picker is handled in toggleFilterPanel() instead, so
+      // that "Clear all filters" can leave it empty (showing all days).
       if (el.id !== "filterDay" && !el.value) el.value = TRIP_START;
     });
   }
