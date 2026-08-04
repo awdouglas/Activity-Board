@@ -204,6 +204,20 @@
   .filter-active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
   .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
   .chk input { width: auto; margin: 0; }
+
+  /* Mobile tweaks */
+  @media (max-width: 540px) {
+    /* Stack the two filter inputs so the date box can't overflow its panel */
+    .filter-panel .inline { flex-direction: column; }
+    /* Never let inputs push past their container */
+    .filter-panel input, .filter-panel select { width: 100%; max-width: 100%; }
+    /* Let the date + time boxes shrink so both fit side by side */
+    .dt-merged input { min-width: 0; font-size: 0.85rem; padding: 11px 6px; }
+    .time-form input { min-width: 0; }
+    /* Keep the suggest-time row on one line: merged inputs shrink, button stays */
+    .time-form { flex-wrap: nowrap; }
+    .time-form .dt-merged { min-width: 0; }
+  }
 </style>
 </head>
 <body>
@@ -212,7 +226,7 @@
     <div class="modal">
       <h2>Welcome! </h2>
       <p>Enter your initials so people know who added and voted for ideas.</p>
-      <input id="initialsInput" maxlength="3" placeholder="" />
+      <input id="initialsInput" maxlength="3" placeholder="initials" />
       <button class="btn" style="width:100%" onclick="saveInitials()">Let's go</button>
     </div>
   </div>
@@ -280,9 +294,11 @@
     <div class="list-head">
       <h2>Ideas</h2>
       <select class="sort" id="sort" onchange="render()">
-        <option value="votes">Most upvoted</option>
-        <option value="new">Newest</option>
-        <option value="updated">Recently updated</option>
+        <option value="new" selected>Newest</option>
+        <option value="old">Oldest</option>
+        <option value="votes">Most Upvoted</option>
+        <option value="updated">Recently Updated</option>
+        <option value="engagement">Most Engagement</option>
       </select>
     </div>
     <div class="toolbar">
@@ -299,8 +315,8 @@
       </div>
       <div class="frow inline">
         <div style="flex:1;">
-          <label>Suggested by (initials)</label>
-          <input id="filterAuthor" placeholder="AD" oninput="onFilterInput()" style="text-transform:uppercase;" />
+          <label>Suggested by</label>
+          <input id="filterAuthor" placeholder="Initials" oninput="onFilterInput()";" />
         </div>
         <div style="flex:1;">
           <label>Scheduled / suggested for day</label>
@@ -515,12 +531,25 @@
     data.ideas.forEach(i => (i.tags || []).forEach(t => set.add(t)));
     return Array.from(set);
   }
+  // Keep the "Add an activity" tag picker in sync as new custom tags arrive from
+  // syncing (either this user's edits or other users' ideas). Only re-renders when
+  // the set of known tags actually changed, so it never disrupts the current selection.
+  let lastKnownTagsKey = "";
+  function refreshAddTagPicker() {
+    const key = allKnownTags().join("|");
+    if (key === lastKnownTagsKey) return;
+    lastKnownTagsKey = key;
+    renderTagPicker("ideaTagPicker", ideaTagSel);
+  }
 
   // Render a tag picker with clickable chips + a "+ custom" button.
   function renderTagPicker(containerId, selectedArr) {
     const el = document.getElementById(containerId);
     if (!el) return;
+    // Include known tags plus any freshly-added custom tags that are selected but
+    // not yet saved on an idea — so a new custom tag shows immediately (before submit).
     const tags = allKnownTags();
+    selectedArr.forEach(t => { if (!tags.includes(t)) tags.push(t); });
     el.innerHTML = tags.map(t =>
       `<span class="tag-opt ${selectedArr.includes(t) ? 'on' : ''}" onclick="toggleTagSel('${containerId}','${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`
     ).join("") + `<span class="tag-opt" style="border-style:dashed;" onclick="addCustomTag('${containerId}')">+ custom</span>`;
@@ -617,6 +646,10 @@
     let latest = idea.created || 0;
     data.comments.forEach(c => { if (c.ideaId === idea.id && c.created > latest) latest = c.created; });
     return latest;
+  }
+  // Number of comments on an idea (used for the "Most Engagement" sort).
+  function commentCount(idea) {
+    return data.comments.filter(c => c.ideaId === idea.id).length;
   }
   function deleteIdea(id) { if (confirm("Delete this idea and its comments & time suggestions?")) sendAction({ action: "delete", id }); }
   // Scroll a just-opened idea section fully into view.
@@ -740,11 +773,14 @@
 
   // ---------- Render ----------
   function render() {
+    refreshAddTagPicker();
     const container = document.getElementById("ideas");
     const sort = document.getElementById("sort").value;
     let list = data.ideas.filter(ideaMatchesFilters);
     if (sort === "votes") list.sort((a,b) => b.voters.length - a.voters.length || b.created - a.created);
     else if (sort === "updated") list.sort((a,b) => lastActivity(b) - lastActivity(a));
+    else if (sort === "old") list.sort((a,b) => a.created - b.created);
+    else if (sort === "engagement") list.sort((a,b) => commentCount(b) - commentCount(a) || b.created - a.created);
     else list.sort((a,b) => b.created - a.created);
 
     // Reflect filter state on the toggle button + summary text.
@@ -771,11 +807,12 @@
       const starred = isStarred(idea.id);
       const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
 
-      // Comments, sorted per this idea's chosen comment sort ("new" default | "votes").
-      const cSort = commentSort[idea.id] || "new";
+      // Comments, sorted per this idea's chosen comment sort ("old" default | "new" | "votes").
+      const cSort = commentSort[idea.id] || "old";
       const ideaComments = data.comments.filter(c => c.ideaId === idea.id).slice().sort((a,b) => {
         if (cSort === "votes") return (b.voters ? b.voters.length : 0) - (a.voters ? a.voters.length : 0) || a.created - b.created;
-        return a.created - b.created;
+        if (cSort === "new") return b.created - a.created;
+        return a.created - b.created;   // "old" — oldest first
       });
       const isCOpen = openComments[idea.id];
 
@@ -889,6 +926,7 @@
               ${ideaComments.length > 1 ? `<div class="section-head">
                 <h4 style="font-size:0.85rem;color:var(--muted);font-weight:600;">Comments</h4>
                 <select class="mini-sort" onchange="setCommentSort('${idea.id}', this.value)">
+                  <option value="old" ${cSort === 'old' ? 'selected' : ''}>Oldest</option>
                   <option value="new" ${cSort === 'new' ? 'selected' : ''}>Newest</option>
                   <option value="votes" ${cSort === 'votes' ? 'selected' : ''}>Most upvoted</option>
                 </select>
