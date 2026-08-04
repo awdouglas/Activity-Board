@@ -163,6 +163,47 @@
   .modal .row { display: flex; gap: 10px; }
   .hidden { display: none !important; }
   .banner { background: #7f1d1d; color: #fecaca; padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; text-align: center; }
+
+  /* Tags */
+  .tag-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tag-opt {
+    background: #0f172a; border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;
+  }
+  .tag-opt:hover { border-color: var(--accent); color: var(--text); }
+  .tag-opt.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .idea-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+  .idea-tag { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); color: var(--accent-hover); padding: 1px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+
+  /* Star */
+  .star-btn { background: none; border: none; cursor: pointer; font-size: 1.15rem; line-height: 1; padding: 2px; color: var(--border); transition: transform 0.1s; }
+  .star-btn:hover { transform: scale(1.2); }
+  .star-btn.on { color: var(--time); }
+
+  /* Comment votes + sort */
+  .comment .cvote {
+    display: inline-flex; align-items: center; gap: 4px; background: #0f172a;
+    border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+    padding: 1px 7px; cursor: pointer; font-size: 0.7rem; flex-shrink: 0; transition: all 0.15s;
+  }
+  .comment .cvote:hover { border-color: var(--up); color: var(--up); }
+  .comment .cvote.voted { background: var(--up); color: #fff; border-color: var(--up); font-weight: 700; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .section-head h4 { margin: 0; }
+  .mini-sort { background: #0f172a; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; }
+
+  /* Filter bar */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 4px 12px; }
+  .toolbar .grow { flex: 1; }
+  .filter-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .filter-panel .frow { margin-bottom: 12px; }
+  .filter-panel .frow:last-child { margin-bottom: 0; }
+  .filter-panel label { font-size: 0.78rem; margin-bottom: 6px; }
+  .filter-panel input, .filter-panel select { margin: 0; }
+  .filter-panel .inline { display: flex; gap: 8px; }
+  .filter-active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
+  .chk input { width: auto; margin: 0; }
 </style>
 </head>
 <body>
@@ -192,6 +233,8 @@
         <div class="divider"></div>
         <input id="editTime" type="time" />
       </div>
+      <label>Tags</label>
+      <div class="tag-picker" id="editTagPicker"></div>
       <div class="row">
         <button class="btn ghost" style="flex:1" onclick="closeEdit()">Cancel</button>
         <button class="btn" style="flex:1" onclick="submitEdit()">Save</button>
@@ -229,6 +272,8 @@
         <div class="divider"></div>
         <input id="ideaTime" type="time" />
       </div>
+      <label>Tags (optional)</label>
+      <div class="tag-picker" id="ideaTagPicker"></div>
       <button class="btn" type="submit" id="submitBtn">Submit idea</button>
     </form>
 
@@ -237,7 +282,37 @@
       <select class="sort" id="sort" onchange="render()">
         <option value="votes">Most upvoted</option>
         <option value="new">Newest</option>
+        <option value="updated">Recently updated</option>
       </select>
+    </div>
+    <div class="toolbar">
+      <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel()">⚙ Filters</button>
+      <button class="btn small ghost" onclick="expandAll(true)">⊕ Expand all</button>
+      <button class="btn small ghost" onclick="expandAll(false)">⊖ Collapse all</button>
+      <span class="grow"></span>
+      <span id="filterSummary" style="font-size:0.75rem; color:var(--muted);"></span>
+    </div>
+    <div class="filter-panel hidden" id="filterPanel">
+      <div class="frow">
+        <label>Filter by tags</label>
+        <div class="tag-picker" id="filterTagPicker"></div>
+      </div>
+      <div class="frow inline">
+        <div style="flex:1;">
+          <label>Suggested by (initials)</label>
+          <input id="filterAuthor" placeholder="e.g. AD" oninput="onFilterInput()" style="text-transform:uppercase;" />
+        </div>
+        <div style="flex:1;">
+          <label>Scheduled / suggested for day</label>
+          <input id="filterDay" type="date" onchange="onFilterInput()" />
+        </div>
+      </div>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="filterStarred" onchange="onFilterInput()" /> ⭐ Show only my starred ideas</label>
+      </div>
+      <div class="frow">
+        <button class="btn small ghost" onclick="clearFilters()">Clear all filters</button>
+      </div>
     </div>
     <div class="ideas" id="ideas"></div>
   </div>
@@ -252,16 +327,32 @@
   const POLL_MS = 5000;              // live-update interval
   const STORE_USER = "ideaBoard.initials";
   const STORE_LOCAL = "ideaBoard.localData";
+  const STORE_STARS = "ideaBoard.stars";      // private per-browser starred idea ids
 
   let me = localStorage.getItem(STORE_USER) || "";
   let data = { ideas: [], comments: [], times: [] };
   let openComments = {};             // ideaId -> bool
   let openTimes = {};                // ideaId -> bool
+  let commentSort = {};              // ideaId -> "new" | "votes"
+  let timeSort = {};                 // ideaId -> "votes" | "new"
   let editingId = null;
   let editingComment = null;         // comment id currently being edited inline
   let busy = false;
   let writeSeq = 0;                  // bumps on every write; guards against stale polls
+  // Stars are private to this user: kept only in localStorage, never sent to the server.
+  let stars = JSON.parse(localStorage.getItem(STORE_STARS) || "[]");
+  // Filter state.
+  let filters = { tags: [], author: "", day: "", starred: false };
   const useBackend = !!API_URL;
+
+  function saveStars() { localStorage.setItem(STORE_STARS, JSON.stringify(stars)); }
+  function isStarred(id) { return stars.includes(id); }
+  function toggleStar(id) {
+    const i = stars.indexOf(id);
+    if (i === -1) stars.push(id); else stars.splice(i, 1);
+    saveStars();
+    render();
+  }
 
   // ---------- Local-mode fallback ----------
   function loadLocal() {
@@ -311,10 +402,11 @@
     const rid = () => String(Date.now()) + Math.floor(Math.random()*1000);
     if (p.action === "add") {
       data.ideas.push({ id: rid(), name: p.name, desc: p.desc || "", url: p.url || "",
-        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [] });
+        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [],
+        tags: (p.tags || "").split(",").map(s => s.trim()).filter(Boolean) });
     } else if (p.action === "edit") {
       const i = data.ideas.find(x => x.id === p.id);
-      if (i && i.author === p.author) { i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; }
+      if (i && i.author === p.author) { i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; i.tags = (p.tags || "").split(",").map(s => s.trim()).filter(Boolean); }
     } else if (p.action === "delete") {
       const i = data.ideas.find(x => x.id === p.id);
       if (i && i.author === p.author) {
@@ -326,7 +418,10 @@
       const i = data.ideas.find(x => x.id === p.id);
       if (i) { const idx = i.voters.indexOf(p.author); idx === -1 ? i.voters.push(p.author) : i.voters.splice(idx,1); }
     } else if (p.action === "comment") {
-      data.comments.push({ id: rid(), ideaId: p.ideaId, author: p.author, text: p.text, created: Date.now() });
+      data.comments.push({ id: rid(), ideaId: p.ideaId, author: p.author, text: p.text, created: Date.now(), voters: [] });
+    } else if (p.action === "voteComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c) { if (!c.voters) c.voters = []; const idx = c.voters.indexOf(p.author); idx === -1 ? c.voters.push(p.author) : c.voters.splice(idx,1); }
     } else if (p.action === "deleteComment") {
       const c = data.comments.find(x => x.id === p.id);
       if (c && c.author === p.author) data.comments = data.comments.filter(x => x.id !== p.id);
@@ -408,6 +503,52 @@
   }
   document.getElementById("initialsInput").addEventListener("keydown", e => { if (e.key === "Enter") saveInitials(); });
 
+  // ---------- Tags ----------
+  const BASE_TAGS = ["Food", "Activity"];
+  // Selection state for each tag picker.
+  let ideaTagSel = [];
+  let editTagSel = [];
+
+  // All known tags = base tags + any custom tags used on existing ideas.
+  function allKnownTags() {
+    const set = new Set(BASE_TAGS);
+    data.ideas.forEach(i => (i.tags || []).forEach(t => set.add(t)));
+    return Array.from(set);
+  }
+
+  // Render a tag picker with clickable chips + a "+ custom" button.
+  function renderTagPicker(containerId, selectedArr) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const tags = allKnownTags();
+    el.innerHTML = tags.map(t =>
+      `<span class="tag-opt ${selectedArr.includes(t) ? 'on' : ''}" onclick="toggleTagSel('${containerId}','${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`
+    ).join("") + `<span class="tag-opt" style="border-style:dashed;" onclick="addCustomTag('${containerId}')">+ custom</span>`;
+  }
+  function selArrFor(containerId) {
+    if (containerId === "ideaTagPicker") return ideaTagSel;
+    if (containerId === "editTagPicker") return editTagSel;
+    if (containerId === "filterTagPicker") return filters.tags;
+    return [];
+  }
+  function toggleTagSel(containerId, tag) {
+    const arr = selArrFor(containerId);
+    const i = arr.indexOf(tag);
+    if (i === -1) arr.push(tag); else arr.splice(i, 1);
+    renderTagPicker(containerId, arr);
+    if (containerId === "filterTagPicker") render();
+  }
+  function addCustomTag(containerId) {
+    const raw = prompt("Enter a custom tag:");
+    if (!raw) return;
+    const tag = raw.trim();
+    if (!tag) return;
+    const arr = selArrFor(containerId);
+    if (!arr.includes(tag)) arr.push(tag);
+    renderTagPicker(containerId, arr);
+    if (containerId === "filterTagPicker") render();
+  }
+
   // ---------- Submit new idea ----------
   document.getElementById("ideaForm").addEventListener("submit", e => {
     e.preventDefault();
@@ -417,12 +558,66 @@
     const datetime = combineDateTime(document.getElementById("ideaDate").value, document.getElementById("ideaTime").value);
     if (!name) return;
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
-    sendAction({ action: "add", name, desc, url, datetime });
+    sendAction({ action: "add", name, desc, url, datetime, tags: ideaTagSel.join(",") });
     e.target.reset();
+    ideaTagSel = [];
+    renderTagPicker("ideaTagPicker", ideaTagSel);
   });
 
   // ---------- Actions ----------
   function toggleVote(id) { sendAction({ action: "vote", id }); }
+  function voteComment(id) { sendAction({ action: "voteComment", id }); }
+  function setCommentSort(id, val) { commentSort[id] = val; render(); }
+  function setTimeSort(id, val) { timeSort[id] = val; render(); }
+
+  // Expand or collapse every idea's comments + time sections at once.
+  function expandAll(open) {
+    data.ideas.forEach(i => { openComments[i.id] = open; openTimes[i.id] = open; });
+    render();
+  }
+
+  // ---------- Filters ----------
+  function toggleFilterPanel() {
+    const panel = document.getElementById("filterPanel");
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) renderTagPicker("filterTagPicker", filters.tags);
+  }
+  function onFilterInput() {
+    filters.author = document.getElementById("filterAuthor").value.trim().toUpperCase();
+    filters.day = document.getElementById("filterDay").value;
+    filters.starred = document.getElementById("filterStarred").checked;
+    render();
+  }
+  function clearFilters() {
+    filters = { tags: [], author: "", day: "", starred: false };
+    document.getElementById("filterAuthor").value = "";
+    document.getElementById("filterDay").value = "";
+    document.getElementById("filterStarred").checked = false;
+    renderTagPicker("filterTagPicker", filters.tags);
+    render();
+  }
+  function anyFilterActive() {
+    return filters.tags.length || filters.author || filters.day || filters.starred;
+  }
+  // Does an idea match the current filters? (day matches the idea's own date OR any suggested time's date)
+  function ideaMatchesFilters(idea) {
+    if (filters.tags.length && !filters.tags.every(t => (idea.tags || []).includes(t))) return false;
+    if (filters.author && idea.author.toUpperCase() !== filters.author) return false;
+    if (filters.starred && !isStarred(idea.id)) return false;
+    if (filters.day) {
+      const dayOf = dt => (dt || "").slice(0, 10);   // "YYYY-MM-DD" prefix, "" if time-only
+      const ideaDay = dayOf(idea.datetime) === filters.day;
+      const suggestDay = data.times.some(t => t.ideaId === idea.id && dayOf(t.datetime) === filters.day);
+      if (!ideaDay && !suggestDay) return false;
+    }
+    return true;
+  }
+  // Timestamp of the most recent activity on an idea (idea creation or newest comment).
+  function lastActivity(idea) {
+    let latest = idea.created || 0;
+    data.comments.forEach(c => { if (c.ideaId === idea.id && c.created > latest) latest = c.created; });
+    return latest;
+  }
   function deleteIdea(id) { if (confirm("Delete this idea and its comments & time suggestions?")) sendAction({ action: "delete", id }); }
   // Scroll a just-opened idea section fully into view.
   function scrollSectionIntoView(id, kind) {
@@ -508,6 +703,8 @@
     const parts = splitDateTime(idea.datetime || "");
     document.getElementById("editDate").value = parts.date;
     document.getElementById("editTime").value = parts.time;
+    editTagSel = (idea.tags || []).slice();
+    renderTagPicker("editTagPicker", editTagSel);
     document.getElementById("editOverlay").classList.remove("hidden");
   }
   function closeEdit() { editingId = null; document.getElementById("editOverlay").classList.add("hidden"); }
@@ -518,7 +715,8 @@
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
     sendAction({ action: "edit", id: editingId, name,
       desc: document.getElementById("editDesc").value.trim(), url,
-      datetime: combineDateTime(document.getElementById("editDate").value, document.getElementById("editTime").value) });
+      datetime: combineDateTime(document.getElementById("editDate").value, document.getElementById("editTime").value),
+      tags: editTagSel.join(",") });
     closeEdit();
   }
 
@@ -544,25 +742,49 @@
   function render() {
     const container = document.getElementById("ideas");
     const sort = document.getElementById("sort").value;
-    let list = [...data.ideas];
+    let list = data.ideas.filter(ideaMatchesFilters);
     if (sort === "votes") list.sort((a,b) => b.voters.length - a.voters.length || b.created - a.created);
+    else if (sort === "updated") list.sort((a,b) => lastActivity(b) - lastActivity(a));
     else list.sort((a,b) => b.created - a.created);
 
+    // Reflect filter state on the toggle button + summary text.
+    const ft = document.getElementById("filterToggle");
+    if (ft) ft.classList.toggle("filter-active", !!anyFilterActive());
+    const summary = document.getElementById("filterSummary");
+    if (summary) {
+      summary.textContent = anyFilterActive()
+        ? `Showing ${list.length} of ${data.ideas.length}`
+        : "";
+    }
+
     if (list.length === 0) {
-      commitHTML(container, '<div class="empty">No ideas yet — be the first to add one!</div>');
+      const msg = anyFilterActive()
+        ? 'No ideas match your filters.'
+        : 'No ideas yet — be the first to add one!';
+      commitHTML(container, `<div class="empty">${msg}</div>`);
       return;
     }
 
     const html = list.map(idea => {
       const voted = idea.voters.includes(me);
       const mine = idea.author === me;
+      const starred = isStarred(idea.id);
       const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
-      const ideaComments = data.comments.filter(c => c.ideaId === idea.id).sort((a,b) => a.created - b.created);
+
+      // Comments, sorted per this idea's chosen comment sort ("new" default | "votes").
+      const cSort = commentSort[idea.id] || "new";
+      const ideaComments = data.comments.filter(c => c.ideaId === idea.id).slice().sort((a,b) => {
+        if (cSort === "votes") return (b.voters ? b.voters.length : 0) - (a.voters ? a.voters.length : 0) || a.created - b.created;
+        return a.created - b.created;
+      });
       const isCOpen = openComments[idea.id];
 
-      // Time suggestions, sorted by votes then chronologically.
-      const ideaTimes = data.times.filter(t => t.ideaId === idea.id)
-        .sort((a,b) => b.voters.length - a.voters.length || new Date(a.datetime) - new Date(b.datetime));
+      // Time suggestions, sorted per this idea's chosen time sort ("votes" default | "new").
+      const tSort = timeSort[idea.id] || "votes";
+      const ideaTimes = data.times.filter(t => t.ideaId === idea.id).slice().sort((a,b) => {
+        if (tSort === "new") return b.created - a.created;
+        return b.voters.length - a.voters.length || new Date(a.datetime) - new Date(b.datetime);
+      });
       const isTOpen = openTimes[idea.id];
       const maxVotes = ideaTimes.reduce((m,t) => Math.max(m, t.voters.length), 0);
 
@@ -580,10 +802,13 @@
           </div>
         </div>`;
         }
+        const cVotes = c.voters ? c.voters.length : 0;
+        const cVoted = c.voters && c.voters.includes(me);
         return `
         <div class="comment">
           <span class="cchip">${escapeHtml(c.author)}</span>
           <span class="ctext">${linkify(c.text)}${c.edited ? '<span class="cedited">(edited)</span>' : ''}</span>
+          <span class="cvote ${cVoted ? 'voted' : ''}" onclick="voteComment('${c.id}')" title="Upvote comment">▲ ${cVotes}</span>
           ${c.author === me ? `<span class="cedit" onclick="startEditComment('${c.id}')">edit</span><span class="cdel" onclick="deleteComment('${c.id}')">delete</span>` : ""}
         </div>`;
       }).join("");
@@ -607,6 +832,10 @@
           </div>`;
       }).join("");
 
+      const tagsHtml = (idea.tags && idea.tags.length)
+        ? `<div class="idea-tags">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>`
+        : "";
+
       return `
         <div class="idea">
           <div class="vote">
@@ -614,8 +843,12 @@
             <span class="count">${idea.voters.length}</span>
           </div>
           <div class="idea-body">
-            <h3>${escapeHtml(idea.name)}</h3>
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <h3 style="flex:1;">${escapeHtml(idea.name)}</h3>
+              <button class="star-btn ${starred ? 'on' : ''}" onclick="toggleStar('${idea.id}')" title="${starred ? 'Unstar' : 'Star'} (private to you)">${starred ? '★' : '☆'}</button>
+            </div>
             ${idea.datetime ? `<div class="when"> ${escapeHtml(formatDateTime(idea.datetime))}</div>` : ""}
+            ${tagsHtml}
             ${idea.desc ? `<p>${linkify(idea.desc)}</p>` : ""}
             ${idea.url ? `<a class="site" href="${escapeHtml(idea.url)}" target="_blank" rel="noopener">${escapeHtml(idea.url)}</a>` : ""}
             <div class="meta">
@@ -635,7 +868,13 @@
               </button>
             </div>
             ${isTOpen ? `<div class="times">
-              <h4>Suggested days &amp; times</h4>
+              <div class="section-head">
+                <h4>Suggested days &amp; times</h4>
+                ${ideaTimes.length > 1 ? `<select class="mini-sort" onchange="setTimeSort('${idea.id}', this.value)">
+                  <option value="votes" ${tSort === 'votes' ? 'selected' : ''}>Most upvoted</option>
+                  <option value="new" ${tSort === 'new' ? 'selected' : ''}>Newest</option>
+                </select>` : ""}
+              </div>
               ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No time suggestions yet.</div>'}
               <div class="time-form">
                 <div class="dt-merged" style="flex:1; margin:0;">
@@ -647,6 +886,13 @@
               </div>
             </div>` : ""}
             ${isCOpen ? `<div class="comments">
+              ${ideaComments.length > 1 ? `<div class="section-head">
+                <h4 style="font-size:0.85rem;color:var(--muted);font-weight:600;">Comments</h4>
+                <select class="mini-sort" onchange="setCommentSort('${idea.id}', this.value)">
+                  <option value="new" ${cSort === 'new' ? 'selected' : ''}>Newest</option>
+                  <option value="votes" ${cSort === 'votes' ? 'selected' : ''}>Most upvoted</option>
+                </select>
+              </div>` : ""}
               ${commentsHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No comments yet.</div>'}
               <div class="comment-form">
                 <textarea id="cinput-${idea.id}" rows="1" placeholder="Add a comment!"></textarea>
@@ -739,6 +985,7 @@
     checkUser();
     await fetchData();
     render();
+    renderTagPicker("ideaTagPicker", ideaTagSel);
     setInterval(poll, POLL_MS);
   }
   init();
