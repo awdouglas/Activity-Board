@@ -120,7 +120,13 @@
     border-radius: 16px; padding: 20px;
   }
   form.card { margin-bottom: 28px; }
-  form.card h2 { margin: 0 0 16px; font-size: 1.15rem; }
+  form.card h2 { margin: 0; font-size: 1.15rem; }
+  .collapsible-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+  .collapsible-head.collapsed {margin: -20px; padding: 20px;}
+  .collapsible-head:not(.collapsed) { margin-bottom: 16px; }
+  .collapse-arrow { font-size: 1.1rem; color: var(--muted); transition: transform 0.2s; }
+  .collapse-arrow.collapsed { transform: rotate(-90deg); }
+  #addIdeaBody.collapsed { display: none; }
   label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 5px; }
   input, textarea {
     width: 100%; background: var(--input-bg); border: 1px solid var(--border);
@@ -244,6 +250,19 @@
   .hidden { display: none !important; }
   .banner { background: #7f1d1d; color: #fecaca; padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; text-align: center; }
 
+  /* Help modal */
+  .help-modal { width: 640px; max-height: 82vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+  .help-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 28px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .help-header h2 { margin: 0; font-size: 1.15rem; }
+  .help-body { overflow-y: auto; padding: 20px 28px 28px; }
+  .help-section { margin-bottom: 22px; }
+  .help-section:last-child { margin-bottom: 0; }
+  .help-section h3 { margin: 0 0 8px; font-size: 1rem; color: var(--text); }
+  .help-section p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+  .help-section ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+  .help-section li { margin-bottom: 4px; }
+  .help-section b { color: var(--text); }
+
   /* Tags */
   .tag-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .tag-opt {
@@ -317,6 +336,20 @@
   .tab-btn:hover { color: var(--text); }
   .tab-btn.active { background: var(--accent); color: #fff; }
 
+  /* Floating help button — small circular "?" pinned to the top-right of the page */
+  .help-fab {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    font-size: 0.85rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: all 0.15s;
+  }
+  .help-fab:hover { border-color: var(--accent); color: var(--text); transform: scale(1.08); }
+  @media (max-width: 540px) {
+    .help-fab { top: 10px; right: 10px; width: 26px; height: 26px; font-size: 0.78rem; }
+  }
+
   /* Calendar */
   .cal-wrap { width: 100%; }
   .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
@@ -365,6 +398,7 @@
 </style>
 </head>
 <body>
+  <button class="help-fab" id="helpFab" onclick="openHelp()" title="Help / tour" aria-label="Help">?</button>
   <!-- Initials modal -->
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -379,7 +413,7 @@
   <div class="overlay hidden" id="editOverlay">
     <div class="modal wide">
       <h2>Edit idea</h2>
-      <label>Activity name</label>
+      <label>Idea name</label>
       <input id="editName" />
       <label>Description</label>
       <textarea id="editDesc" rows="2"></textarea>
@@ -404,6 +438,66 @@
     </div>
   </div>
 
+  <div class="overlay hidden" id="helpOverlay" onclick="if(event.target===this) closeHelp()">
+    <div class="modal wide help-modal">
+      <div class="help-header">
+        <h2>Welcome to the Idea Board!</h2>
+        <button class="link-btn" onclick="closeHelp()">✕ close</button>
+      </div>
+      <div class="help-body">
+
+        <div class="help-section">
+          <h3>Your initials</h3>
+          <p>When you first visit, you're asked for your initials. They identify what you've posted, commented, or voted on. You can change them anytime with the <b>"change"</b> link next to your badge at the top of the page.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>💡 Add an idea</h3>
+          <p>The <b>"Add an idea"</b> card at the top is collapsible — click its header (or the ▾ arrow) to expand or collapse it. Fill in your idea's name, optional description, website, day/time, and tags, then hit <b>Submit idea</b>.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>📋 The Board tab</h3>
+          <ul>
+            <li><b>▲ Upvote</b> — click the arrow on the left of any idea to vote for it. Click again to remove your vote.</li>
+            <li><b>⭐ Star</b> — a <u>private</u> bookmark only you can see, to keep track of your personal favorites. This is <u>only</u> stored on your browser.</li>
+            <li><b>✎ Edit / 🗑 Delete</b> — only appear on ideas <i>you</i> posted.</li>
+            <li><b>🕒 Scheduling suggestions</b> — anyone can propose a day/time for an idea and others can vote on it. The most-upvoted suggestion "wins," unless someone marks <b>🔒 Reservation Made</b> — that always takes priority over votes.</li>
+            <li><b>💬 Comments</b> — add comments, upvote them, sort by newest/oldest/most-upvoted, and edit or delete your own.</li>
+            <li>Use <b>⊕ Expand all / ⊖ Collapse all</b> to open or close every idea's comments and suggestions at once.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>⚙ Filters &amp; sorting</h3>
+          <p>Click <b>⚙ Filters</b> to narrow the list by tag, who suggested it, a specific day, ideas with reservations, or your starred ideas. Use the <b>sort dropdown</b> to order ideas by newest, oldest, most upvoted, recently updated, or most engagement (comment count).</p>
+        </div>
+
+        <div class="help-section">
+          <h3>🗓️ The Calendar tab</h3>
+          <p>See everything with a day/time on an actual calendar. Switch between <b>Week / 3 Days / 1 Day</b> views and navigate with <b>← Prev / Next →</b>. Each idea's time is auto-resolved from its own posted time and any scheduling suggestions.</p>
+          <ul>
+            <li>Events are <b>color-coded by vote count</b> — a heat map from pale yellow (fewest votes) to saturated orange (most votes), ordered left-to-right.</li>
+            <li><b>🔒 Reservation Made</b> events are always shown in red and always placed first — they can't be out-voted.</li>
+            <li>A <b>diagonal stripe</b> means the end time wasn't specified and was defaulted to 1 hour — treat it as unverified.</li>
+            <li>Click any event to jump back to the Board and highlight that idea.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>🔄 Staying in sync</h3>
+          <p>The board updates live as others make changes. If something looks out of date, click <b>↻ refresh</b> next to the sync status at the top.</p>
+        </div>
+
+        <div class="help-section">
+          <h3> ☀️ Light / 🌙 Dark mode</h3>
+          <p>Use the toggle switch in the header to flip between dark and light themes — your choice is remembered on this device.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <div class="wrap" id="pageWrap">
     <header>
       <h1>Montreal Idea Board</h1>
@@ -417,8 +511,8 @@
     </header>
 
     <div class="tabs">
-      <button class="tab-btn active" id="tabBoard" onclick="switchTab('board')">Board</button>
-      <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
+      <button class="tab-btn active" id="tabBoard" onclick="switchTab('board')">📋 Board</button>
+      <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Calendar</button>
     </div>
 
     <div class="banner hidden" id="configBanner">
@@ -427,8 +521,12 @@
 
     <div id="boardView">
     <form class="card" id="ideaForm">
-      <h2>Add an activity</h2>
-      <label for="activityName">Activity name</label>
+      <div class="collapsible-head" id="addIdeaHead" onclick="toggleAddIdeaForm()">
+        <h2>Add an idea</h2>
+        <span class="collapse-arrow" id="addIdeaArrow">▾</span>
+      </div>
+      <div id="addIdeaBody">
+      <label for="activityName">Idea name</label>
       <input id="activityName" name="activityName" autocomplete="off" required placeholder="Tim Hortons" />
       <label for="desc">Description (optional)</label>
       <textarea id="desc" rows="2" placeholder="Coffee and donuts!"></textarea>
@@ -447,6 +545,7 @@
       <label>Tags (optional)</label>
       <div class="tag-picker" id="ideaTagPicker"></div>
       <button class="btn" type="submit" id="submitBtn">Submit idea</button>
+      </div>
     </form>
 
     <div class="list-head">
@@ -536,6 +635,23 @@
   const STORE_LOCAL = "ideaBoard.localData";
   const STORE_STARS = "ideaBoard.stars";      // private per-browser starred idea ids
   const STORE_THEME = "ideaBoard.theme";      // "dark" | "light" — defaults to dark
+  const STORE_ADD_COLLAPSED = "ideaBoard.addFormCollapsed";
+  const STORE_HELP_SEEN = "ideaBoard.helpSeen";
+  // Set to true to automatically open the Help modal the first time a new visitor
+  // sets their initials. Currently disabled — flip to true to re-enable.
+  const AUTO_SHOW_HELP_ON_FIRST_VISIT = false;
+
+  // ---------- Add-idea form collapse ----------
+  function applyAddIdeaCollapsed(collapsed) {
+    document.getElementById("addIdeaBody").classList.toggle("collapsed", collapsed);
+    document.getElementById("addIdeaArrow").classList.toggle("collapsed", collapsed);
+    document.getElementById("addIdeaHead").classList.toggle("collapsed", collapsed);
+  }
+  function toggleAddIdeaForm() {
+    const collapsed = !document.getElementById("addIdeaBody").classList.contains("collapsed");
+    applyAddIdeaCollapsed(collapsed);
+    localStorage.setItem(STORE_ADD_COLLAPSED, collapsed ? "1" : "0");
+  }
 
   // ---------- Theme ----------
   function applyTheme(theme) {
@@ -799,8 +915,13 @@
   function saveInitials() {
     const val = document.getElementById("initialsInput").value.trim().toUpperCase();
     if (!val) { document.getElementById("initialsInput").focus(); return; }
+    const isFirstVisit = !me;
     me = val; localStorage.setItem(STORE_USER, me);
     checkUser(); render();
+    if (AUTO_SHOW_HELP_ON_FIRST_VISIT && isFirstVisit && !localStorage.getItem(STORE_HELP_SEEN)) {
+      localStorage.setItem(STORE_HELP_SEEN, "1");
+      setTimeout(openHelp, 300);   // let the initials modal finish closing first
+    }
   }
   function changeInitials() {
     document.getElementById("initialsInput").value = me;
@@ -1303,7 +1424,7 @@
             </div>` : ""}
             <div>
               <button class="toggle" onclick="toggleTimeSection('${idea.id}')">
-                🕒 ${ideaTimes.length} time${ideaTimes.length === 1 ? "" : "s"} suggested ${isTOpen ? "▲" : "▼"}
+                🕒 ${ideaTimes.length} scheduling suggestion${ideaTimes.length === 1 ? "" : "s"} ${isTOpen ? "▲" : "▼"}
               </button>
               <button class="toggle" onclick="toggleCommentSection('${idea.id}')">
                 💬 ${ideaComments.length} comment${ideaComments.length === 1 ? "" : "s"} ${isCOpen ? "▲" : "▼"}
@@ -1403,6 +1524,10 @@
     document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
     if (tab === "calendar") renderCalendar();
   }
+
+  // ---------- Help ----------
+  function openHelp() { document.getElementById("helpOverlay").classList.remove("hidden"); }
+  function closeHelp() { document.getElementById("helpOverlay").classList.add("hidden"); }
 
   // ---------- Calendar ----------
   function daysInCalView() { return calView === "day" ? 1 : (calView === "three" ? 3 : 7); }
@@ -1649,6 +1774,7 @@
     if (!useBackend) document.getElementById("configBanner").classList.remove("hidden");
     setSync(false);
     checkUser();
+    applyAddIdeaCollapsed((localStorage.getItem(STORE_ADD_COLLAPSED) ?? "1") === "1");
     await fetchData();
     render();
     renderTagPicker("ideaTagPicker", ideaTagSel);
