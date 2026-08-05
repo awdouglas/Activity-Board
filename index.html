@@ -6,18 +6,18 @@
 <title>Montreal Idea Board</title>
 <style>
   :root {
-    /* Dark mode: mid-tone greys (not black) scaling up to lighter greys */
-    --bg-1: #26262b;
-    --bg-2: #313136;
-    --card: #3a3a41;
-    --card-hover: #45454d;
-    --accent: #9a9aa4;
-    --accent-hover: #c2c2ca;
+    /* Dark mode: original purple gradient background with dark-navy card/border accents */
+    --bg-1: #0f172a;
+    --bg-2: #1e1b4b;
+    --card: #1e293b;
+    --card-hover: #273449;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
     --accent-text: #f4f4f5;
-    --text: #eeeef0;
-    --muted: #b3b3bb;
-    --border: #52525b;
-    --input-bg: #2c2c31;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #334155;
+    --input-bg: #0f172a;
     --up: #22c55e;
     --danger: #ef4444;
     --time: #f59e0b;
@@ -34,17 +34,18 @@
     color-scheme: dark;
   }
   [data-theme="light"] {
-    --bg-1: #f4f4f5;
-    --bg-2: #e4e4e7;
+    /* Light mode: same purple/navy family, desaturated into soft pastel tones */
+    --bg-1: #f1f0fb;
+    --bg-2: #e7e5f7;
     --card: #ffffff;
-    --card-hover: #f0f0f2;
-    --accent: #52525b;
-    --accent-hover: #3f3f46;
+    --card-hover: #f5f4fc;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
     --accent-text: #ffffff;
-    --text: #18181b;
-    --muted: #6b6b74;
-    --border: #d4d4d8;
-    --input-bg: #f4f4f5;
+    --text: #26243d;
+    --muted: #6b6b8a;
+    --border: #dcdaf0;
+    --input-bg: #f6f5fc;
     --up: #16a34a;
     --danger: #dc2626;
     --time: #d97706;
@@ -148,10 +149,10 @@
   .dt-stack .time-row-pair .divider { width:1px; align-self:stretch; background:var(--border); }
   input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .btn {
-    background: var(--action); color: #fff; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
     padding: 12px 20px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.15s;
   }
-  .btn:hover { background: var(--action-hover); }
+  .btn:hover { background: var(--accent-hover); }
   .btn.small { padding: 7px 14px; font-size: 0.85rem; }
   .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
   .btn.ghost:hover { border-color: var(--accent); color: var(--text); }
