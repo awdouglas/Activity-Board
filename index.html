@@ -219,7 +219,7 @@
   .comment-form textarea { margin: 0; min-height: 40px; }
   .toggle { background: none; border: none; color: var(--accent-hover); cursor: pointer; font-size: 0.82rem; padding: 0; margin-top: 10px; margin-right: 16px; }
 
-  /* Time suggestions */
+  /* Scheduling suggestions */
   .times { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
   .times h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
   .time-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -1082,7 +1082,7 @@
   function commentCount(idea) {
     return data.comments.filter(c => c.ideaId === idea.id).length;
   }
-  function deleteIdea(id) { if (confirm("Delete this idea and its comments & time suggestions?")) sendAction({ action: "delete", id }); }
+  function deleteIdea(id) { if (confirm("Delete this idea and its comments & scheduling suggestions?")) sendAction({ action: "delete", id }); }
   // Scroll a just-opened idea section fully into view.
   function scrollSectionIntoView(id, kind) {
     requestAnimationFrame(() => {
@@ -1319,7 +1319,7 @@
       });
       const isCOpen = openComments[idea.id];
 
-      // Time suggestions, sorted per this idea's chosen time sort ("votes" default | "new").
+      // Scheduling suggestions, sorted per this idea's chosen time sort ("votes" default | "new").
       const tSort = timeSort[idea.id] || "votes";
       const ideaTimes = data.times.filter(t => t.ideaId === idea.id).slice().sort((a,b) => {
         if (tSort === "new") return b.created - a.created;
@@ -1438,7 +1438,7 @@
                   <option value="new" ${tSort === 'new' ? 'selected' : ''}>Newest</option>
                 </select>` : ""}
               </div>
-              ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No time suggestions yet.</div>'}
+              ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No scheduling suggestions yet.</div>'}
               <div class="dt-stack">
                 <div class="date-row"><input id="tdate-${idea.id}" type="date" onfocus="scrollTimeInputUp('${idea.id}')" /></div>
                 <div class="time-row-pair">
