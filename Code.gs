@@ -154,7 +154,8 @@ function doPost(e) {
     if (action === "add") {
       const sheet = ideasSheet();
       const id = String(Date.now()) + Math.floor(Math.random() * 1000);
-      sheet.appendRow([id, data.name, data.desc || "", data.url || "", "", data.author, Date.now(), "", data.tags || "", ""]);
+      // The author automatically upvotes their own idea (they can un-vote afterwards).
+      sheet.appendRow([id, data.name, data.desc || "", data.url || "", "", data.author, Date.now(), data.author, data.tags || "", ""]);
       // Store datetime as text so Sheets doesn't convert a date-only value to midnight.
       writeText(sheet, sheet.getLastRow(), 5, data.datetime || "");
       writeText(sheet, sheet.getLastRow(), 10, data.endtime || "");

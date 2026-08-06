@@ -744,7 +744,7 @@
     const rid = () => String(Date.now()) + Math.floor(Math.random()*1000);
     if (p.action === "add") {
       data.ideas.push({ id: rid(), name: p.name, desc: p.desc || "", url: p.url || "",
-        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [],
+        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [p.author],
         tags: (p.tags || "").split(",").map(s => s.trim()).filter(Boolean), endtime: p.endtime || "" });
     } else if (p.action === "edit") {
       const i = data.ideas.find(x => x.id === p.id);
