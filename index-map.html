@@ -1,0 +1,2295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Montreal Idea Board</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  :root {
+    /* Dark mode: original purple gradient background with dark-navy card/border accents */
+    --bg-1: #0f172a;
+    --bg-2: #1e1b4b;
+    --card: #1e293b;
+    --card-hover: #273449;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --accent-text: #f4f4f5;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #334155;
+    --input-bg: #0f172a;
+    --up: #22c55e;
+    --danger: #ef4444;
+    --time: #f59e0b;
+    /* Blue accent used specifically for primary action buttons (submit/suggest/post) */
+    --action: #3b82f6;
+    --action-hover: #60a5fa;
+    /* Traditional web link blue — darkens on hover */
+    --link: #4da3ff;
+    --link-hover: #2f7ee0;
+    /* Muted blue used for idea tag chips — less saturated than the action buttons */
+    --tag-bg: rgba(96,165,250,0.16);
+    --tag-border: rgba(96,165,250,0.45);
+    --tag-text: #93c5fd;
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    /* Light mode: same purple/navy family, desaturated into soft pastel tones */
+    --bg-1: #f1f0fb;
+    --bg-2: #e7e5f7;
+    --card: #ffffff;
+    --card-hover: #f5f4fc;
+    --accent: #2b579a;
+    --accent-hover: #3b6bb3;
+    --accent-text: #ffffff;
+    --text: #26243d;
+    --muted: #6b6b8a;
+    --border: #dcdaf0;
+    --input-bg: #f6f5fc;
+    --up: #16a34a;
+    --danger: #dc2626;
+    --time: #d97706;
+    --action: #2563eb;
+    --action-hover: #3b82f6;
+    --link: #1a73e8;
+    --link-hover: #0b4fb0;
+    --tag-bg: rgba(37,99,235,0.10);
+    --tag-border: rgba(37,99,235,0.35);
+    --tag-text: #1d4ed8;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 32px 20px; padding-bottom: 20vh; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { margin: 0 0 6px; font-size: 2rem; letter-spacing: -0.5px; }
+  header p { margin: 0; color: var(--muted); }
+  .you {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: 999px; font-size: 0.9rem; color: var(--muted);
+  }
+  .you .badge {
+    background: var(--accent); color: #fff; font-weight: 700;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 0.75rem;
+  }
+  .you button, .link-btn {
+    background: none; border: none; color: var(--accent-hover);
+    cursor: pointer; font-size: 0.8rem; text-decoration: underline; padding: 0;
+  }
+  .sync {
+    font-size: 0.72rem; color: var(--muted); margin-top: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); }
+
+  /* Theme toggle switch: track shows sun/moon; the sliding knob is dark-filled in
+     dark mode and white-filled in light mode. */
+  .theme-switch {
+    position: relative; display: inline-flex; align-items: center;
+    width: 46px; height: 24px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--input-bg); cursor: pointer; margin-left: 8px; flex-shrink: 0;
+    transition: background 0.2s; padding: 0;
+  }
+  .theme-switch .track-icon {
+    position: absolute; font-size: 0.62rem; line-height: 1; top: 50%; transform: translateY(-50%);
+  }
+  .theme-switch .track-icon.sun { left: 5px; }
+  .theme-switch .track-icon.moon { right: 5px; }
+  .theme-switch .knob {
+    position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: #1c1c20; border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    transition: left 0.2s ease, background 0.2s ease;
+  }
+  .theme-switch.is-light .knob { left: 24px; background: #ffffff; border-color: rgba(0,0,0,0.1); }
+  .dot.off { background: var(--danger); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .link-btn.spinning { display: inline-block; animation: spin 0.6s linear; }
+
+  form.card, .idea {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+  }
+  form.card { margin-bottom: 28px; }
+  form.card h2 { margin: 0; font-size: 1.15rem; }
+  .collapsible-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+  .collapsible-head.collapsed {margin: -20px; padding: 20px;}
+  .collapsible-head:not(.collapsed) { margin-bottom: 16px; }
+  .collapse-arrow { font-size: 1.1rem; color: var(--muted); transition: transform 0.2s; }
+  .collapse-arrow.collapsed { transform: rotate(-90deg); }
+  #addIdeaBody.collapsed { display: none; }
+  label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 5px; }
+  input, textarea {
+    width: 100%; background: var(--input-bg); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); padding: 11px 13px;
+    font-size: 0.95rem; font-family: inherit; margin-bottom: 14px; resize: vertical;
+  }
+  input[type="date"], input[type="time"], input[type="datetime-local"] { color-scheme: inherit; }
+  /* Merged date+time control — looks like one field; time is disabled until a date is set */
+  .dt-merged { display:flex; align-items:center; background:var(--input-bg); border:1px solid var(--border); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .dt-merged:focus-within { outline:2px solid var(--accent); }
+  .dt-merged input { border:none; background:transparent; margin:0; border-radius:0; flex:1; min-width:0; }
+  .dt-merged .divider { width:1px; align-self:stretch; background:var(--border); }
+  .dt-merged input[type="time"]:disabled { opacity:0.4; cursor:not-allowed; }
+  /* Date-on-its-own-row, start/end time on the row below (used for suggest-time + add/edit idea) */
+  .dt-stack { margin-bottom: 14px; }
+  .dt-stack .date-row { margin-bottom: 8px; }
+  .dt-stack .date-row input[type="date"] {
+    width: 100%; background:var(--input-bg); border:1px solid var(--border); border-radius:10px;
+    color: var(--text); padding: 11px 13px; font-size: 0.95rem; margin: 0;
+  }
+  .dt-stack .date-row input[type="date"]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .dt-stack .time-row-pair { display:flex; align-items:center; background:var(--input-bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .dt-stack .time-row-pair:focus-within { outline:2px solid var(--accent); }
+  .dt-stack .time-row-pair input[type="time"] { border:none; background:transparent; margin:0; border-radius:0; flex:1; min-width:0; padding: 11px 13px; color: var(--text); font-size: 0.95rem; }
+  .dt-stack .time-row-pair .arrow { color: var(--muted); padding: 0 6px; flex-shrink: 0; font-size: 0.85rem; }
+  .dt-stack .time-row-pair .divider { width:1px; align-self:stretch; background:var(--border); }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 12px 20px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.small { padding: 7px 14px; font-size: 0.85rem; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--text); }
+
+  .list-head { display: flex; justify-content: space-between; align-items: center; margin: 0 4px 12px; }
+  .list-head h2 { margin: 0; font-size: 1.15rem; }
+  .sort { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; }
+
+  .ideas { display: flex; flex-direction: column; gap: 14px; }
+  .idea { display: flex; gap: 16px; align-items: flex-start; transition: background 0.15s; }
+  .idea:hover { background: var(--card-hover); }
+  @keyframes ideaHighlight {
+    0%   { background: rgba(99,102,241,0.35); box-shadow: 0 0 0 2px var(--accent); }
+    100% { background: transparent; box-shadow: 0 0 0 2px transparent; }
+  }
+  .idea.jump-highlight { animation: ideaHighlight 2.2s ease-out; border-radius: 16px; }
+  .vote { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 54px; }
+  .vote button {
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--muted);
+    width: 44px; height: 40px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; transition: all 0.15s;
+  }
+  .vote button:hover { border-color: var(--up); color: var(--up); }
+  .vote button.voted { background: var(--up); color: #fff; border-color: var(--up); }
+  .vote .count { font-weight: 700; font-size: 1.05rem; }
+  .idea-body { flex: 1; min-width: 0; }
+  .idea-body h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .idea-body p { margin: 0 0 8px; color: var(--muted); font-size: 0.92rem; line-height: 1.45; word-wrap: break-word; white-space: pre-wrap; }
+  .idea-body a.site { color: var(--link); text-decoration: none; font-size: 0.88rem; word-break: break-all; }
+  .idea-body a.site:hover { color: var(--link-hover); text-decoration: underline; }
+  .when {
+    display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px;
+    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4);
+    color: var(--time); padding: 4px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+  }
+  .meta { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.78rem; color: var(--muted); flex-wrap: wrap; }
+  .chip { background: var(--accent); color: #fff; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; }
+  .voters { display: flex; gap: 4px; flex-wrap: wrap; }
+  .voter { background: var(--input-bg); border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; font-size: 0.7rem; }
+  .actions { display: flex; gap: 12px; margin-top: 10px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+
+  /* Comments */
+  .comments { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .comment { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; font-size: 0.85rem; }
+  .comment .cchip { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); font-weight: 700; padding: 2px 7px; border-radius: 6px; font-size: 0.7rem; flex-shrink: 0; }
+  .comment .ctext { color: var(--text); word-wrap: break-word; min-width: 0; white-space: pre-wrap; }
+  .inline-link { color: var(--link); text-decoration: underline; word-break: break-all; }
+  .inline-link:hover { color: var(--link-hover); }
+  .comment .cedited { color: var(--muted); font-size: 0.68rem; font-style: italic; margin-left: 6px; white-space: nowrap; }
+  .comment .cdel { color: var(--danger); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
+  .comment .cdel:hover { opacity: 1; }
+  .comment .cedit { color: var(--accent-hover); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; margin-left: auto; }
+  .comment .cedit:hover { opacity: 1; }
+  .comment .cedit-box { flex: 1; min-width: 0; }
+  .comment .cedit-box textarea { margin: 0 0 6px; font-size: 0.85rem; }
+  .comment .cedit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .comment-form { display: flex; gap: 8px; margin-top: 10px; align-items: flex-start; }
+  .comment-form textarea { margin: 0; min-height: 40px; }
+  .toggle { background: none; border: none; color: var(--accent-hover); cursor: pointer; font-size: 0.82rem; padding: 0; margin-top: 10px; margin-right: 16px; }
+
+  /* Scheduling suggestions */
+  .times { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .times h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+  .time-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .time-vote {
+    display: flex; align-items: center; gap: 6px; background: var(--input-bg);
+    border: 1px solid var(--border); color: var(--muted); border-radius: 8px;
+    padding: 5px 10px; cursor: pointer; transition: all 0.15s; font-size: 0.8rem; flex-shrink: 0;
+  }
+  .time-vote:hover { border-color: var(--time); color: var(--time); }
+  .time-vote.voted { background: var(--time); color: #1f2937; border-color: var(--time); font-weight: 700; }
+  .time-label { font-size: 0.88rem; color: var(--text); flex: 1; min-width: 0; }
+  .time-label .by { color: var(--muted); font-size: 0.75rem; margin-left: 6px; }
+  .time-voters { display: flex; gap: 3px; flex-wrap: wrap; }
+  .time-del { color: var(--danger); cursor: pointer; font-size: 0.72rem; opacity: 0.7; flex-shrink: 0; }
+  .time-del:hover { opacity: 1; }
+  .best { color: var(--time); font-size: 0.7rem; font-weight: 700; margin-left: 6px; }
+  .time-form { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .time-form input { margin: 0; flex: 1; min-width: 180px; }
+
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 50; padding: 20px; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 340px; max-width: 100%; text-align: center; }
+  .modal.wide { width: 420px; text-align: left; }
+  .modal h2 { margin: 0 0 8px; }
+  .modal p { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
+  #initialsInput { text-align: center; text-transform: uppercase; font-size: 1.4rem; letter-spacing: 4px; }
+  .modal .row { display: flex; gap: 10px; }
+  .hidden { display: none !important; }
+  .banner { background: #7f1d1d; color: #fecaca; padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; text-align: center; }
+
+  /* Help modal */
+  .help-modal { width: 640px; max-height: 82vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+  .help-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 28px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .help-header h2 { margin: 0; font-size: 1.15rem; }
+  .help-body { overflow-y: auto; padding: 20px 28px 28px; }
+  .help-section { margin-bottom: 22px; }
+  .help-section:last-child { margin-bottom: 0; }
+  .help-section h3 { margin: 0 0 8px; font-size: 1rem; color: var(--text); }
+  .help-section p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+  .help-section ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+  .help-section li { margin-bottom: 4px; }
+  .help-section b { color: var(--text); }
+
+  /* Tags */
+  .tag-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tag-opt {
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;
+  }
+  .tag-opt:hover { border-color: var(--accent); color: var(--text); }
+  .tag-opt.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .idea-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+  .idea-tag { background: var(--tag-bg); border: 1px solid var(--tag-border); color: var(--tag-text); padding: 1px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+
+  /* Star */
+  .star-btn { background: none; border: none; cursor: pointer; font-size: 1.15rem; line-height: 1; padding: 2px; color: var(--border); transition: transform 0.1s; }
+  .star-btn:hover { transform: scale(1.2); }
+  .star-btn.on { color: var(--time); }
+  .reserved-badge {
+    display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 8px;
+    background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.5);
+    color: #fca5a5; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700;
+  }
+
+  /* Comment votes + sort */
+  .comment .cvote {
+    display: inline-flex; align-items: center; gap: 4px; background: var(--input-bg);
+    border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+    padding: 1px 7px; cursor: pointer; font-size: 0.7rem; flex-shrink: 0; transition: all 0.15s;
+  }
+  .comment .cvote:hover { border-color: var(--up); color: var(--up); }
+  .comment .cvote.voted { background: var(--up); color: #fff; border-color: var(--up); font-weight: 700; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .section-head h4 { margin: 0; }
+  .mini-sort { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; }
+
+  /* Filter bar */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 4px 12px; }
+  .toolbar .grow { flex: 1; }
+  .filter-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .filter-panel .frow { margin-bottom: 12px; }
+  .filter-panel .frow:last-child { margin-bottom: 0; }
+  .filter-panel label { font-size: 0.78rem; margin-bottom: 6px; }
+  .filter-panel input, .filter-panel select { margin: 0; }
+  .filter-panel .inline { display: flex; gap: 8px; }
+  .filter-active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
+  .chk input { width: auto; margin: 0; }
+
+  /* Mobile tweaks */
+  @media (max-width: 540px) {
+    /* Stack the two filter inputs so the date box can't overflow its panel */
+    .filter-panel .inline { flex-direction: column; }
+    .filter-panel .inline > div { min-width: 0; width: 100%; }
+    /* Never let text/date inputs push past their container */
+    .filter-panel input, .filter-panel select { width: 100%; max-width: 100%; min-width: 0; }
+    /* iOS date/time inputs have an intrinsic min-width that ignores width:100% —
+       removing the native appearance lets them shrink to fit the container. */
+    .filter-panel input[type="date"], .filter-panel input[type="time"],
+    .dt-merged input[type="date"], .dt-merged input[type="time"],
+    .dt-stack input[type="date"], .dt-stack input[type="time"] {
+      -webkit-appearance: none; appearance: none;
+    }
+    /* ...but the starred checkbox must stay small and inline with its label text */
+    .filter-panel .chk { width: 100%; flex-wrap: nowrap; }
+    .filter-panel .chk input { width: auto; max-width: none; flex: none; }
+    .dt-merged input { min-width: 0; font-size: 0.85rem; padding: 11px 6px; }
+    .dt-stack .time-row-pair input, .dt-stack .date-row input { font-size: 0.85rem; padding: 11px 6px; }
+  }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 5px; }
+  .tab-btn { flex: 1; background: none; border: none; color: var(--muted); font-size: 0.95rem; font-weight: 600; padding: 10px 14px; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { background: var(--accent); color: #fff; }
+
+  /* Floating help button — small circular "?" pinned to the top-right of the page */
+  .help-fab {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    font-size: 0.85rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: all 0.15s;
+  }
+  .help-fab:hover { border-color: var(--accent); color: var(--text); transform: scale(1.08); }
+  @media (max-width: 540px) {
+    .help-fab { top: 10px; right: 10px; width: 26px; height: 26px; font-size: 0.78rem; }
+  }
+
+  /* Calendar */
+  .cal-wrap { width: 100%; }
+  .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .cal-toolbar .grow { flex: 1; }
+  .cal-nav-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; }
+  .cal-nav-btn:hover { border-color: var(--accent); }
+  .cal-range-label { font-weight: 700; font-size: 0.95rem; min-width: 160px; text-align: center; }
+  .cal-view-toggle { display: flex; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  .cal-view-toggle button { background: none; border: none; color: var(--muted); font-size: 0.82rem; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .cal-view-toggle button.active { background: var(--accent); color: #fff; }
+  .cal-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.72rem; color: var(--muted); margin-bottom: 12px; }
+  .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .cal-legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .cal-grid { display: flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+  .cal-time-col { width: 56px; flex-shrink: 0; border-right: 1px solid var(--border); }
+  .cal-time-col .cal-hour {
+    height: 52px; font-size: 0.68rem; color: var(--muted); text-align: right;
+    padding-right: 6px; box-sizing: border-box; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: flex-end; padding-top: 2px;
+  }
+  .cal-day-col { flex: 1; min-width: 0; border-right: 1px solid var(--border); position: relative; }
+  .cal-day-col:last-child { border-right: none; }
+  .cal-day-head { height: 52px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px; font-size: 0.78rem; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+  .cal-day-head .dnum { display: block; font-size: 1.05rem; color: var(--text); }
+  .cal-day-head.today { color: var(--accent-hover); }
+  .cal-slots { position: relative; }
+  .cal-hourline { height: 52px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+  .cal-event {
+    position: absolute; border-radius: 6px; padding: 4px 6px; font-size: 0.68rem;
+    overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.15);
+    color: #fff; box-sizing: border-box; transition: filter 0.15s;
+  }
+  .cal-event:hover { filter: brightness(1.15); z-index: 20 !important; }
+  .cal-event .ce-name { font-weight: 700; display: block; white-space: normal; word-break: break-word; overflow: hidden; line-height: 1.2; }
+  .cal-event .ce-time { display: block; opacity: 0.85; white-space: normal; overflow: hidden; line-height: 1.15; }
+  .cal-event .ce-lock { margin-right: 2px; }
+  .cal-empty-note { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 30px 10px; }
+  .cal-warn { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 8px 12px; border-radius: 8px; font-size: 0.78rem; margin-top: 6px; }
+  .reservation-chk { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 0.82rem; color: var(--time); }
+  .reservation-chk input { width: auto; margin: 0; }
+  @media (max-width: 700px) {
+    .cal-time-col { width: 40px; }
+    .cal-day-head { font-size: 0.68rem; }
+    .cal-event .ce-time { display: none; }
+  }
+
+  /* ---------- Map tab ---------- */
+  .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .map-toolbar .grow { flex: 1; }
+  #mapCanvas {
+    height: 62vh; min-height: 380px; width: 100%;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+    z-index: 1;   /* keep Leaflet panes beneath our modals (z-index 50) */
+  }
+  /* Leaflet's own controls/popups need theme-aware surfaces in dark mode. */
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .leaflet-popup-content { margin: 12px 14px; font-family: inherit; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-bar a, .leaflet-bar a:hover { background: var(--card); color: var(--text); border-color: var(--border); }
+  .leaflet-container { background: var(--input-bg); font-family: inherit; }
+  .leaflet-control-attribution { background: rgba(0,0,0,0.55) !important; color: #cbd5e1 !important; font-size: 0.62rem; }
+  .leaflet-control-attribution a { color: #93c5fd !important; }
+  /* Dim the basemap tiles in dark mode so pins stay legible against them. */
+  [data-theme="light"] .map-tiles { filter: none; }
+  .map-tiles { filter: brightness(0.72) contrast(1.05) saturate(0.85) hue-rotate(178deg) invert(0.92); }
+
+  .map-pin {
+    display: grid; place-items: center; border-radius: 50%;
+    width: 26px; height: 26px; font-size: 0.7rem; font-weight: 800;
+    color: #1f2937; border: 2px solid rgba(255,255,255,0.85);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.45);
+  }
+  .map-pin.reserved { color: #fff; }
+  .map-pin.me-pin { background: var(--accent); color: #fff; border-color: #fff; }
+  .map-pop h4 { margin: 0 0 4px; font-size: 0.95rem; color: var(--text); }
+  .map-pop .mp-meta { color: var(--muted); font-size: 0.75rem; margin-bottom: 6px; }
+  .map-pop .mp-desc { color: var(--muted); font-size: 0.8rem; margin: 0 0 8px; max-height: 80px; overflow: auto; white-space: pre-wrap; }
+  .map-pop .mp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .map-pop .mp-actions button, .map-pop .mp-actions a {
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 4px 9px; font-size: 0.75rem; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+  }
+  .map-pop .mp-actions button:hover, .map-pop .mp-actions a:hover { border-color: var(--accent); }
+  .map-note { font-size: 0.75rem; color: var(--muted); margin-top: 8px; }
+  .map-warn { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 8px 12px; border-radius: 8px; font-size: 0.78rem; margin-bottom: 10px; }
+  .map-nearby { margin-top: 14px; }
+  .map-nearby h3 { font-size: 0.95rem; margin: 0 0 8px; }
+  .map-nearby-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 6px; background: var(--card); font-size: 0.85rem; cursor: pointer; }
+  .map-nearby-row:hover { background: var(--card-hover); border-color: var(--accent); }
+  .map-nearby-row .mn-dist { color: var(--time); font-weight: 700; font-size: 0.78rem; flex-shrink: 0; }
+  .map-nearby-row .mn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 540px) {
+    #mapCanvas { height: 54vh; min-height: 320px; }
+  }
+</style>
+</head>
+<body>
+  <button class="help-fab" id="helpFab" onclick="openHelp()" title="Help / tour" aria-label="Help">?</button>
+  <!-- Initials modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2>Welcome! </h2>
+      <p>Enter your initials so people know who added and voted for ideas.</p>
+      <input id="initialsInput" maxlength="3" placeholder="initials" />
+      <button class="btn" style="width:100%" onclick="saveInitials()">Let's go</button>
+    </div>
+  </div>
+
+  <!-- Edit modal -->
+  <div class="overlay hidden" id="editOverlay">
+    <div class="modal wide">
+      <h2>Edit idea</h2>
+      <label>Idea name</label>
+      <input id="editName" />
+      <label>Description</label>
+      <textarea id="editDesc" rows="2"></textarea>
+      <label>Website</label>
+      <input id="editUrl" />
+      <label>Day &amp; time (enter either or both)</label>
+      <div class="dt-stack">
+        <div class="date-row"><input id="editDate" type="date" /></div>
+        <div class="time-row-pair">
+          <input id="editTime" type="time" title="Start time" />
+          <div class="divider"></div>
+          <span class="arrow">→</span>
+          <input id="editEndTime" type="time" title="End time (optional)" />
+        </div>
+      </div>
+      <label>Tags</label>
+      <div class="tag-picker" id="editTagPicker"></div>
+      <div class="row">
+        <button class="btn ghost" style="flex:1" onclick="closeEdit()">Cancel</button>
+        <button class="btn" style="flex:1" onclick="submitEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="helpOverlay" onclick="if(event.target===this) closeHelp()">
+    <div class="modal wide help-modal">
+      <div class="help-header">
+        <h2>Welcome to the Idea Board!</h2>
+        <button class="link-btn" onclick="closeHelp()">✕ close</button>
+      </div>
+      <div class="help-body">
+
+        <div class="help-section">
+          <h3>Your initials</h3>
+          <p>When you first visit, you're asked for your initials. They identify what you've posted, commented, or voted on. You can change them anytime with the <b>"change"</b> link next to your badge at the top of the page.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>💡 Add an idea</h3>
+          <p>The <b>"Add an idea"</b> card at the top is collapsible — click its header (or the ▾ arrow) to expand or collapse it. Fill in your idea's name, optional description, website, day/time, and tags, then hit <b>Submit idea</b>.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>📋 The Board tab</h3>
+          <ul>
+            <li><b>▲ Upvote</b> — click the arrow on the left of any idea to vote for it. Click again to remove your vote.</li>
+            <li><b>⭐ Star</b> — a <u>private</u> bookmark only you can see, to keep track of your personal favorites. This is <u>only</u> stored on your browser.</li>
+            <li><b>✎ Edit / 🗑 Delete</b> — only appear on ideas <i>you</i> posted.</li>
+            <li><b>🕒 Scheduling suggestions</b> — anyone can propose a day/time for an idea and others can vote on it. The most-upvoted suggestion "wins," unless someone marks <b>🔒 Reservation Made</b> — that always takes priority over votes.</li>
+            <li><b>💬 Comments</b> — add comments, upvote them, sort by newest/oldest/most-upvoted, and edit or delete your own.</li>
+            <li>Use <b>⊕ Expand all / ⊖ Collapse all</b> to open or close every idea's comments and suggestions at once.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>⚙ Filters &amp; sorting</h3>
+          <p>Click <b>⚙ Filters</b> to narrow the list by tag, who suggested it, a specific day, ideas with reservations, or your starred ideas. Use the <b>sort dropdown</b> to order ideas by newest, oldest, most upvoted, recently updated, or most engagement (comment count).</p>
+        </div>
+
+        <div class="help-section">
+          <h3>🗓️ The Calendar tab</h3>
+          <p>See everything with a day/time on an actual calendar. Switch between <b>Week / 3 Days / 1 Day</b> views and navigate with <b>← Prev / Next →</b>. Each idea's time is auto-resolved from its own posted time and any scheduling suggestions.</p>
+          <ul>
+            <li>Events are <b>color-coded by vote count</b> — a heat map from pale yellow (fewest votes) to saturated orange (most votes), ordered left-to-right.</li>
+            <li><b>🔒 Reservation Made</b> events are always shown in red and always placed first — they can't be out-voted.</li>
+            <li>A <b>diagonal stripe</b> means the end time wasn't specified and was defaulted to 1 hour — treat it as unverified.</li>
+            <li>Click any event to jump back to the Board and highlight that idea.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>📍 The Map tab</h3>
+          <p>Every idea we can place shows up as a pin, following whatever filters the Board currently has applied. Pins use the same color code as the calendar: red for <b>🔒 Reservation Made</b>, otherwise a pale-yellow → orange heat map by vote count (the number on the pin is its vote total).</p>
+          <ul>
+            <li><b>📍 Find my location</b> — with your permission, drops a marker where you are and lists the <b>nearest ideas</b> below the map.</li>
+            <li><b>Click a pin</b> for details, a link back to the Board, and one-tap <b>directions</b> in Google or Apple Maps.</li>
+            <li><b>🔄 Resolve missing pins</b> — looks up any ideas that don't have a location yet. Each idea's spot comes from a Google Maps link in its website/description, else a street address in its description, else a search for its name. Results are saved, so this only needs running when new ideas are added.</li>
+            <li>If an idea can't be placed, it's listed above the map — adding a street address or Maps link to its description usually fixes it.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>🔄 Staying in sync</h3>
+          <p>The board updates live as others make changes. If something looks out of date, click <b>↻ refresh</b> next to the sync status at the top.</p>
+        </div>
+
+        <div class="help-section">
+          <h3> ☀️ Light / 🌙 Dark mode</h3>
+          <p>Use the toggle switch in the header to flip between dark and light themes — your choice is remembered on this device.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="mapsOverlay" onclick="if(event.target===this) closeMapsExport()">
+    <div class="modal wide help-modal">
+      <div class="help-header">
+        <h2>📍 Export to Google Maps</h2>
+        <button class="link-btn" onclick="closeMapsExport()">✕ close</button>
+      </div>
+      <div class="help-body">
+        <p style="margin:0 0 16px;">Exporting <b><span id="mapsCount">0</span></b> idea(s) — whatever the Board is currently filtered to.</p>
+
+        <div class="help-section">
+          <h3>Option 1 — Google My Maps (bulk, recommended)</h3>
+          <p>Download a CSV, then in <b>Google My Maps</b>: <i>Create a new map → Import → upload the CSV</i>. Choose <b>Location</b> as the position column and <b>Name</b> as the title. Every idea gets pinned automatically.</p>
+          <button class="btn small" style="margin-top:10px" onclick="downloadMapsCsv()">⬇ Download CSV</button>
+        </div>
+
+        <div class="help-section">
+          <h3>Option 2 — Save into a Maps List (one at a time)</h3>
+          <p>Google doesn't allow apps to write to your saved Lists, so this step is manual: open each link, then tap <b>Save</b> and pick your list.</p>
+          <div id="mapsLinkList" style="margin-top:12px;"></div>
+          <button class="btn small ghost" style="margin-top:10px" onclick="copyMapsLinks()">📋 Copy all links</button>
+        </div>
+
+        <div class="help-section">
+          <h3>What got matched</h3>
+          <p>Each idea resolves in this order: a <b>Google Maps link</b> in its website/description → a <b>street address</b> found in its description → otherwise a <b>name search</b>.</p>
+          <div id="mapsResolveSummary" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" id="pageWrap">
+    <header>
+      <h1>Montreal Idea Board</h1>
+      <p>Sun Oct 11 - Thu Oct 15</p>
+      <div class="you hidden" id="youBar">
+        <span class="badge" id="youBadge"></span>
+        <span>You are signed in</span>
+        <button onclick="changeInitials()">change</button>
+      </div>
+      <div class="sync" id="syncBar"><span class="dot" id="dot"></span><span id="syncText">Connecting…</span><button class="link-btn" id="refreshBtn" style="margin-left:6px" onclick="manualRefresh()">↻ refresh</button><button class="theme-switch" id="themeSwitch" onclick="toggleTheme()" title="Toggle light / dark mode" aria-label="Toggle light / dark mode"><span class="track-icon sun">☀️</span><span class="track-icon moon">🌙</span><span class="knob"></span></button></div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabBoard" onclick="switchTab('board')">📋 Board</button>
+      <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Calendar</button>
+      <button class="tab-btn" id="tabMap" onclick="switchTab('map')">📍 Map</button>
+    </div>
+
+    <div class="banner hidden" id="configBanner">
+      ⚠️ Backend not configured. Open the file and set <b>API_URL</b> (see setup-instructions.md). Running in local-only mode.
+    </div>
+
+    <div id="boardView">
+    <form class="card" id="ideaForm">
+      <div class="collapsible-head" id="addIdeaHead" onclick="toggleAddIdeaForm()">
+        <h2>Add an idea</h2>
+        <span class="collapse-arrow" id="addIdeaArrow">▾</span>
+      </div>
+      <div id="addIdeaBody">
+      <label for="activityName">Idea name</label>
+      <input id="activityName" name="activityName" autocomplete="off" required placeholder="Tim Hortons" />
+      <label for="desc">Description (optional)</label>
+      <textarea id="desc" rows="2" placeholder="Coffee and donuts!"></textarea>
+      <label for="url">Website (optional)</label>
+      <input id="url" type="url" placeholder="https://..." />
+      <label for="ideaDate">Day &amp; time (optional — enter either or both)</label>
+      <div class="dt-stack">
+        <div class="date-row"><input id="ideaDate" type="date" /></div>
+        <div class="time-row-pair">
+          <input id="ideaTime" type="time" title="Start time" />
+          <div class="divider"></div>
+          <span class="arrow">→</span>
+          <input id="ideaEndTime" type="time" title="End time (optional)" />
+        </div>
+      </div>
+      <label>Tags (optional)</label>
+      <div class="tag-picker" id="ideaTagPicker"></div>
+      <button class="btn" type="submit" id="submitBtn">Submit idea</button>
+      </div>
+    </form>
+
+    <div class="list-head">
+      <h2>Ideas</h2>
+      <select class="sort" id="sort" onchange="render()">
+        <option value="new" selected>Newest</option>
+        <option value="old">Oldest</option>
+        <option value="votes">Most Upvoted</option>
+        <option value="updated">Recently Updated</option>
+        <option value="engagement">Most Engagement</option>
+      </select>
+    </div>
+    <div class="toolbar">
+      <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel()">⚙ Filters</button>
+      <button class="btn small ghost" onclick="expandAll(true)">⊕ Expand all</button>
+      <button class="btn small ghost" onclick="expandAll(false)">⊖ Collapse all</button>
+      <button class="btn small ghost" id="exportMapsBtn" onclick="openMapsExport()">📍 Export to Maps</button>
+      <span class="grow"></span>
+      <span id="filterSummary" style="font-size:0.75rem; color:var(--muted);"></span>
+    </div>
+    <div class="filter-panel hidden" id="filterPanel">
+      <div class="frow">
+        <label>Filter by tags</label>
+        <div class="tag-picker" id="filterTagPicker"></div>
+      </div>
+      <div class="frow inline">
+        <div style="flex:1;">
+          <label>Suggested by</label>
+          <input id="filterAuthor" placeholder="Initials" oninput="onFilterInput()";" />
+        </div>
+        <div style="flex:1;">
+          <label>Scheduled / suggested for day</label>
+          <input id="filterDay" type="date" onchange="onFilterInput()" />
+        </div>
+      </div>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="filterStarred" onchange="onFilterInput()" /> ⭐ Show only my starred ideas</label>
+      </div>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="filterUpvoted" onchange="onFilterInput()" /> ▲ Show only ideas I've upvoted</label>
+      </div>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="filterReserved" onchange="onFilterInput()" /> 🔒 Show only ideas with a Reservation Made</label>
+      </div>
+      <div class="frow">
+        <button class="btn small ghost" onclick="clearFilters()">Clear all filters</button>
+      </div>
+    </div>
+    <div class="ideas" id="ideas"></div>
+    </div><!-- /boardView -->
+
+    <div id="calendarView" class="hidden cal-wrap">
+      <div class="cal-toolbar">
+        <button class="cal-nav-btn" onclick="calNav(-1)">← Prev</button>
+        <div class="cal-range-label" id="calRangeLabel"></div>
+        <button class="cal-nav-btn" onclick="calNav(1)">Next →</button>
+        <span class="grow"></span>
+        <div class="cal-view-toggle">
+          <button id="calViewWeek" onclick="setCalView('week')">Week</button>
+          <button id="calViewThree" onclick="setCalView('three')">3 Days</button>
+          <button id="calViewDay" onclick="setCalView('day')">1 Day</button>
+        </div>
+      </div>
+      <div class="cal-legend">
+        <span><span class="sw" style="background:linear-gradient(90deg, hsl(35,90%,52%), hsl(48,35%,62%))"></span> Most votes → fewest (heat map, left to right)</span>
+        <span><span class="sw" style="background:rgba(239,68,68,0.92)"></span> 🔒 Reservation made (always wins)</span>
+        <span><span class="sw" style="background:repeating-linear-gradient(135deg,rgba(148,163,184,0.9),rgba(148,163,184,0.9) 4px,hsl(40,60%,57%) 4px,hsl(40,60%,57%) 8px)"></span> Unverified end time (defaulted to 1hr)</span>
+      </div>
+      <div id="calGrid"></div>
+    </div>
+
+    <div id="mapView" class="hidden">
+      <div class="map-toolbar">
+        <button class="btn small ghost" id="mapLocateBtn" onclick="locateMe()">📍 Find my location</button>
+        <button class="btn small ghost" id="mapFitBtn" onclick="fitMapToPins()">⤢ Fit all pins</button>
+        <button class="btn small ghost" id="mapGeocodeBtn" onclick="runGeocodePass(false)">🔄 Resolve missing pins</button>
+        <span class="grow"></span>
+        <span id="mapStatus" style="font-size:0.75rem; color:var(--muted);"></span>
+      </div>
+      <div class="map-warn hidden" id="mapUnmapped"></div>
+      <div id="mapCanvas"></div>
+      <div class="cal-legend" style="margin-top:10px;">
+        <span><span class="sw" style="background:linear-gradient(90deg, hsl(35,90%,52%), hsl(48,35%,62%))"></span> Most votes → fewest (heat map)</span>
+        <span><span class="sw" style="background:rgba(239,68,68,0.92)"></span> 🔒 Reservation made</span>
+        <span><span class="sw" style="background:var(--accent)"></span> Your location</span>
+      </div>
+      <div class="map-note">
+        Pins follow the Board's current filters. Locations are resolved from each idea's Maps link,
+        then a street address in its description, then its name — and cached, so this is fast after the first pass.
+      </div>
+      <div class="map-nearby hidden" id="mapNearby"></div>
+    </div>
+  </div>
+
+<script>
+  /* ============================================================
+     CONFIG — paste your Google Apps Script Web App URL here.
+     See setup-instructions.md. Leave "" to run in local mode.
+     ============================================================ */
+  const API_URL = "https://script.google.com/macros/s/AKfycbyXPJYH-VF-YNzD82vvLfDGptwMjv5IvJW8vaf0XMWr8dZkSh8r72Jlm9d1xdlW5Ok4jw/exec";
+
+  /* ============================================================
+     TRIP DATE RANGE — the only dates users can pick.
+     To re-purpose this board for a different trip, just change
+     these two dates (format: "YYYY-MM-DD"). All date pickers
+     (add idea, edit, suggest time, filter) are limited to this range.
+     ============================================================ */
+  const TRIP_START = "2026-10-11";   // Sunday, October 11, 2026
+  const TRIP_END   = "2026-10-17";   // Saturday, October 17, 2026
+
+  /* City/region appended to Google Maps searches during export, so an address or
+     activity name resolves in the right place (e.g. "Tim Hortons" alone is ambiguous).
+     Set to "" to disable and search the raw name/address only. */
+  const TRIP_CITY = "Montreal, QC";
+
+  const POLL_MS = 5000;              // live-update interval
+  const STORE_USER = "ideaBoard.initials";
+  const STORE_LOCAL = "ideaBoard.localData";
+  const STORE_STARS = "ideaBoard.stars";      // private per-browser starred idea ids
+  const STORE_THEME = "ideaBoard.theme";      // "dark" | "light" — defaults to dark
+  const STORE_ADD_COLLAPSED = "ideaBoard.addFormCollapsed";
+  const STORE_HELP_SEEN = "ideaBoard.helpSeen";
+  // Set to true to automatically open the Help modal the first time a new visitor
+  // sets their initials. Currently disabled — flip to true to re-enable.
+  const AUTO_SHOW_HELP_ON_FIRST_VISIT = false;
+
+  // ---------- Add-idea form collapse ----------
+  function applyAddIdeaCollapsed(collapsed) {
+    document.getElementById("addIdeaBody").classList.toggle("collapsed", collapsed);
+    document.getElementById("addIdeaArrow").classList.toggle("collapsed", collapsed);
+    document.getElementById("addIdeaHead").classList.toggle("collapsed", collapsed);
+  }
+  function toggleAddIdeaForm() {
+    const collapsed = !document.getElementById("addIdeaBody").classList.contains("collapsed");
+    applyAddIdeaCollapsed(collapsed);
+    localStorage.setItem(STORE_ADD_COLLAPSED, collapsed ? "1" : "0");
+  }
+
+  // ---------- Theme ----------
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    const sw = document.getElementById("themeSwitch");
+    if (sw) sw.classList.toggle("is-light", theme === "light");
+  }
+  function toggleTheme() {
+    const current = localStorage.getItem(STORE_THEME) || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    localStorage.setItem(STORE_THEME, next);
+    applyTheme(next);
+  }
+  applyTheme(localStorage.getItem(STORE_THEME) || "dark");   // default: dark
+
+  let me = localStorage.getItem(STORE_USER) || "";
+  let data = { ideas: [], comments: [], times: [] };
+  let openComments = {};             // ideaId -> bool
+  let openTimes = {};                // ideaId -> bool
+  let commentSort = {};              // ideaId -> "new" | "votes"
+  let timeSort = {};                 // ideaId -> "votes" | "new"
+  let editingId = null;
+  let editingComment = null;         // comment id currently being edited inline
+  let editingTimeId = null;          // time-suggestion id currently being edited inline (reservation/time tweak)
+  let busy = false;
+  let writeSeq = 0;                  // bumps on every write; guards against stale polls
+  let activeTab = "board";           // "board" | "calendar"
+  let calView = "week";              // "week" | "three" | "day"
+  let calAnchor = TRIP_START;        // "YYYY-MM-DD" — first visible day in the calendar
+  // Stars are private to this user: kept only in localStorage, never sent to the server.
+  let stars = JSON.parse(localStorage.getItem(STORE_STARS) || "[]");
+  // Filter state.
+  let filters = { tags: [], author: "", day: "", starred: false, reserved: false, upvoted: false };
+  const useBackend = !!API_URL;
+
+  function saveStars() { localStorage.setItem(STORE_STARS, JSON.stringify(stars)); }
+  function isStarred(id) { return stars.includes(id); }
+  function toggleStar(id) {
+    const i = stars.indexOf(id);
+    if (i === -1) stars.push(id); else stars.splice(i, 1);
+    saveStars();
+    render();
+  }
+
+  // ---------- Local-mode fallback ----------
+  function loadLocal() {
+    data = JSON.parse(localStorage.getItem(STORE_LOCAL) || '{"ideas":[],"comments":[],"times":[]}');
+    if (!data.times) data.times = [];
+  }
+  function saveLocal() { localStorage.setItem(STORE_LOCAL, JSON.stringify(data)); }
+
+  // ---------- Backend calls ----------
+  async function fetchData() {
+    if (!useBackend) { loadLocal(); return; }
+    const seqAtStart = writeSeq;
+    try {
+      const res = await fetch(API_URL, { method: "GET" });
+      const json = await res.json();
+      // Discard this snapshot if a write happened while it was in flight —
+      // otherwise stale server data would briefly clobber our optimistic update.
+      if (writeSeq !== seqAtStart || busy) return;
+      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+    } catch (err) { setSync(false); }
+  }
+
+  async function sendAction(payload) {
+    payload.author = me;
+    // Apply the change locally right away so the UI responds instantly (optimistic).
+    applyLocal(payload);
+    render();
+    if (!useBackend) { saveLocal(); return; }
+    busy = true;
+    writeSeq++;                      // invalidates any poll fetch already in flight
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      // Replace with the authoritative server state (reconciles our optimistic change
+      // and merges in anything other users did in the meantime).
+      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+    } catch (err) { setSync(false); }
+    finally { busy = false; render(); }
+  }
+
+  // Mirror backend logic when no backend is configured.
+  function applyLocal(p) {
+    const rid = () => String(Date.now()) + Math.floor(Math.random()*1000);
+    if (p.action === "add") {
+      data.ideas.push({ id: rid(), name: p.name, desc: p.desc || "", url: p.url || "",
+        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [p.author],
+        tags: (p.tags || "").split(",").map(s => s.trim()).filter(Boolean), endtime: p.endtime || "",
+        lat: null, lng: null, geocodedFrom: "" });
+    } else if (p.action === "edit") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i && i.author === p.author) {
+        // Mirror the backend: changing name/desc/url invalidates cached coordinates.
+        const locationChanged = i.name !== p.name || (i.desc || "") !== (p.desc || "") || (i.url || "") !== (p.url || "");
+        i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; i.tags = (p.tags || "").split(",").map(s => s.trim()).filter(Boolean); i.endtime = p.endtime || "";
+        if (locationChanged) { i.lat = null; i.lng = null; i.geocodedFrom = ""; }
+      }
+    } else if (p.action === "delete") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i && i.author === p.author) {
+        data.ideas = data.ideas.filter(x => x.id !== p.id);
+        data.comments = data.comments.filter(c => c.ideaId !== p.id);
+        data.times = data.times.filter(t => t.ideaId !== p.id);
+      }
+    } else if (p.action === "vote") {
+      const i = data.ideas.find(x => x.id === p.id);
+      if (i) { const idx = i.voters.indexOf(p.author); idx === -1 ? i.voters.push(p.author) : i.voters.splice(idx,1); }
+    } else if (p.action === "comment") {
+      data.comments.push({ id: rid(), ideaId: p.ideaId, author: p.author, text: p.text, created: Date.now(), voters: [] });
+    } else if (p.action === "voteComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c) { if (!c.voters) c.voters = []; const idx = c.voters.indexOf(p.author); idx === -1 ? c.voters.push(p.author) : c.voters.splice(idx,1); }
+    } else if (p.action === "deleteComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c && c.author === p.author) data.comments = data.comments.filter(x => x.id !== p.id);
+    } else if (p.action === "editComment") {
+      const c = data.comments.find(x => x.id === p.id);
+      if (c && c.author === p.author) { c.text = p.text; c.edited = true; }
+    } else if (p.action === "suggestTime") {
+      data.times.push({ id: rid(), ideaId: p.ideaId, author: p.author, datetime: p.datetime, created: Date.now(), voters: [p.author], endtime: p.endtime || "", reservation: !!p.reservation });
+    } else if (p.action === "editTime") {
+      const t = data.times.find(x => x.id === p.id);
+      if (t && t.author === p.author) { t.datetime = p.datetime || ""; t.endtime = p.endtime || ""; t.reservation = !!p.reservation; }
+    } else if (p.action === "voteTime") {
+      const t = data.times.find(x => x.id === p.id);
+      if (t) { const idx = t.voters.indexOf(p.author); idx === -1 ? t.voters.push(p.author) : t.voters.splice(idx,1); }
+    } else if (p.action === "deleteTime") {
+      const t = data.times.find(x => x.id === p.id);
+      if (t && t.author === p.author) data.times = data.times.filter(x => x.id !== p.id);
+    }
+  }
+
+  function setSync(ok) {
+    document.getElementById("dot").className = "dot" + (ok ? "" : " off");
+    document.getElementById("syncText").textContent = useBackend
+      ? (ok ? "Live — synced across devices" : "Offline — retrying…")
+      : "Local mode (this browser only)";
+  }
+
+  // ---------- Format / parse flexible date-time ----------
+  // Stored formats:  "YYYY-MM-DDTHH:MM" (both) · "YYYY-MM-DD" (date only) · "HH:MM" (time only)
+  // Format just an "HH:MM" end-time value (used for the " – 5:00 PM" part of a range).
+  function formatTimeOnly(t) {
+    if (!t) return "";
+    const d = new Date("2000-01-01T" + t);
+    return isNaN(d) ? t : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  function formatDateTime(dt) {
+    if (!dt) return "";
+    if (/^\d{1,2}:\d{2}$/.test(dt)) {                     // time only
+      const d = new Date("2000-01-01T" + dt);
+      return isNaN(d) ? dt : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) {                 // date only
+      const d = new Date(dt + "T00:00");
+      return isNaN(d) ? dt : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    }
+    const d = new Date(dt);                               // both date + time
+    if (isNaN(d)) return dt;
+    return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  // Combine separate date + time fields into one stored string.
+  function combineDateTime(date, time) {
+    if (date && time) return date + "T" + time;
+    if (date) return date;          // date only
+    if (time) return time;          // time only
+    return "";
+  }
+  // Split a stored string back into { date, time } for editing.
+  function splitDateTime(dt) {
+    if (!dt) return { date: "", time: "" };
+    if (/^\d{1,2}:\d{2}$/.test(dt)) return { date: "", time: dt };
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) return { date: dt, time: "" };
+    const parts = dt.split("T");
+    return { date: parts[0] || "", time: parts[1] || "" };
+  }
+
+  // ---------- Calendar time resolution ----------
+  // Turn any stored datetime string into minutes-since-midnight, or null if no time part.
+  function timeToMinutes(dt) {
+    const parts = splitDateTime(dt);
+    if (!parts.time) return null;
+    const m = parts.time.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+  function minutesToTimeStr(mins) {
+    mins = ((mins % 1440) + 1440) % 1440;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
+  }
+
+  // Pick the "winning" time suggestion for an idea per priority rules:
+  //   1) Any suggestion with reservation=true always wins (tie-break: most votes, then oldest).
+  //   2) Else, among suggestions with more than 1 upvote, the most upvoted (tie-break: oldest).
+  //   3) Else, null (caller falls back to the idea's own posted time).
+  function resolveWinningTimeSuggestion(ideaId) {
+    const times = data.times.filter(t => t.ideaId === ideaId && t.datetime);
+    if (!times.length) return null;
+    const byPriority = (a, b) => (b.voters.length - a.voters.length) || (a.created - b.created);
+    const reservations = times.filter(t => t.reservation).sort(byPriority);
+    if (reservations.length) return reservations[0];
+    const popular = times.filter(t => t.voters.length > 1).sort(byPriority);
+    if (popular.length) return popular[0];
+    return null;
+  }
+  // Fallback used only when the idea has no own time AND no >1-vote suggestion:
+  // the single most-upvoted suggestion regardless of vote count (tie-break oldest).
+  function resolveFallbackTimeSuggestion(ideaId) {
+    const times = data.times.filter(t => t.ideaId === ideaId && t.datetime);
+    if (!times.length) return null;
+    return times.slice().sort((a, b) => (b.voters.length - a.voters.length) || (a.created - b.created))[0];
+  }
+
+  // Compute the calendar-ready schedule for an idea: { date, startMin, endMin, source, reserved, unverifiedEnd }
+  // or null if there's no resolvable date for this idea at all.
+  function resolveIdeaSchedule(idea) {
+    const winning = resolveWinningTimeSuggestion(idea.id);
+    let chosen, source;
+    if (winning) {
+      chosen = winning; source = winning.reservation ? "reservation" : "suggestion";
+    } else if (idea.datetime) {
+      chosen = idea; source = "idea";
+    } else {
+      const fallback = resolveFallbackTimeSuggestion(idea.id);
+      if (fallback) { chosen = fallback; source = "fallback"; }
+      else return null;
+    }
+    const parts = splitDateTime(chosen.datetime);
+    if (!parts.date) return null;   // no actual day to place this on
+    let startMin = timeToMinutes(chosen.datetime);
+    let unverifiedEnd = false;
+    if (startMin === null) startMin = 9 * 60;   // date-only entries default to displaying at 9am
+    let endMin;
+    if (chosen.endtime) {
+      endMin = timeToMinutes(chosen.endtime.length <= 5 ? chosen.endtime : (splitDateTime(chosen.endtime).time || chosen.endtime));
+      if (endMin === null || endMin <= startMin) endMin = startMin + 60;
+    } else {
+      endMin = startMin + 60;         // default 1-hour length
+      unverifiedEnd = true;           // flag: end time wasn't actually specified
+    }
+    return {
+      date: parts.date, startMin, endMin,
+      source, reserved: source === "reservation", unverifiedEnd,
+      votes: (chosen.voters ? chosen.voters.length : (idea.voters ? idea.voters.length : 0))
+    };
+  }
+
+  // ---------- Initials ----------
+  function checkUser() {
+    if (me) {
+      document.getElementById("overlay").classList.add("hidden");
+      document.getElementById("youBar").classList.remove("hidden");
+      document.getElementById("youBadge").textContent = me;
+    } else {
+      document.getElementById("overlay").classList.remove("hidden");
+      document.getElementById("youBar").classList.add("hidden");
+      setTimeout(() => document.getElementById("initialsInput").focus(), 50);
+    }
+  }
+  function saveInitials() {
+    const val = document.getElementById("initialsInput").value.trim().toUpperCase();
+    if (!val) { document.getElementById("initialsInput").focus(); return; }
+    const isFirstVisit = !me;
+    me = val; localStorage.setItem(STORE_USER, me);
+    checkUser(); render();
+    if (AUTO_SHOW_HELP_ON_FIRST_VISIT && isFirstVisit && !localStorage.getItem(STORE_HELP_SEEN)) {
+      localStorage.setItem(STORE_HELP_SEEN, "1");
+      setTimeout(openHelp, 300);   // let the initials modal finish closing first
+    }
+  }
+  function changeInitials() {
+    document.getElementById("initialsInput").value = me;
+    document.getElementById("overlay").classList.remove("hidden");
+    setTimeout(() => document.getElementById("initialsInput").select(), 50);
+  }
+  document.getElementById("initialsInput").addEventListener("keydown", e => { if (e.key === "Enter") saveInitials(); });
+
+  // ---------- Tags ----------
+  const BASE_TAGS = ["Food", "Activity"];
+  // Selection state for each tag picker.
+  let ideaTagSel = [];
+  let editTagSel = [];
+
+  // All known tags = base tags + any custom tags used on existing ideas.
+  function allKnownTags() {
+    const set = new Set(BASE_TAGS);
+    data.ideas.forEach(i => (i.tags || []).forEach(t => set.add(t)));
+    return Array.from(set);
+  }
+  // Keep the "Add an activity" tag picker in sync as new custom tags arrive from
+  // syncing (either this user's edits or other users' ideas). Only re-renders when
+  // the set of known tags actually changed, so it never disrupts the current selection.
+  let lastKnownTagsKey = "";
+  function refreshAddTagPicker() {
+    const key = allKnownTags().join("|");
+    if (key === lastKnownTagsKey) return;
+    lastKnownTagsKey = key;
+    renderTagPicker("ideaTagPicker", ideaTagSel);
+    // Also keep the filter's tag picker in sync while it's open, so newly added or
+    // removed tags appear without having to close and reopen the filter panel.
+    const panel = document.getElementById("filterPanel");
+    if (panel && !panel.classList.contains("hidden")) {
+      renderTagPicker("filterTagPicker", filters.tags);
+    }
+  }
+
+  // Render a tag picker with clickable chips + a "+ custom" button.
+  function renderTagPicker(containerId, selectedArr) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    // Include known tags plus any freshly-added custom tags that are selected but
+    // not yet saved on an idea — so a new custom tag shows immediately (before submit).
+    const tags = allKnownTags();
+    selectedArr.forEach(t => { if (!tags.includes(t)) tags.push(t); });
+    el.innerHTML = tags.map(t =>
+      `<span class="tag-opt ${selectedArr.includes(t) ? 'on' : ''}" onclick="toggleTagSel('${containerId}','${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`
+    ).join("") + `<span class="tag-opt" style="border-style:dashed;" onclick="addCustomTag('${containerId}')">+ custom</span>`;
+  }
+  function selArrFor(containerId) {
+    if (containerId === "ideaTagPicker") return ideaTagSel;
+    if (containerId === "editTagPicker") return editTagSel;
+    if (containerId === "filterTagPicker") return filters.tags;
+    return [];
+  }
+  function toggleTagSel(containerId, tag) {
+    const arr = selArrFor(containerId);
+    const i = arr.indexOf(tag);
+    if (i === -1) arr.push(tag); else arr.splice(i, 1);
+    renderTagPicker(containerId, arr);
+    if (containerId === "filterTagPicker") render();
+  }
+  function addCustomTag(containerId) {
+    const raw = prompt("Enter a custom tag:");
+    if (!raw) return;
+    const tag = raw.trim();
+    if (!tag) return;
+    const arr = selArrFor(containerId);
+    if (!arr.includes(tag)) arr.push(tag);
+    renderTagPicker(containerId, arr);
+    if (containerId === "filterTagPicker") render();
+  }
+
+  // ---------- Submit new idea ----------
+  document.getElementById("ideaForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const name = document.getElementById("activityName").value.trim();
+    const desc = document.getElementById("desc").value.trim();
+    let url = document.getElementById("url").value.trim();
+    const datetime = combineDateTime(document.getElementById("ideaDate").value, document.getElementById("ideaTime").value);
+    const endtime = document.getElementById("ideaEndTime").value;
+    if (!name) return;
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    const conflict = checkReservationConflict(datetime, endtime);
+    if (conflict) {
+      if (!confirm(`⚠️ This overlaps with "${conflict.name}", which has a Reservation Made. Submit anyway?`)) return;
+    }
+    sendAction({ action: "add", name, desc, url, datetime, endtime, tags: ideaTagSel.join(",") });
+    e.target.reset();
+    ideaTagSel = [];
+    renderTagPicker("ideaTagPicker", ideaTagSel);
+  });
+
+  // ---------- Actions ----------
+  function toggleVote(id) { sendAction({ action: "vote", id }); }
+  function voteComment(id) { sendAction({ action: "voteComment", id }); }
+  function setCommentSort(id, val) { commentSort[id] = val; render(); }
+  function setTimeSort(id, val) { timeSort[id] = val; render(); }
+
+  // Expand or collapse every idea's comments + time sections at once.
+  function expandAll(open) {
+    data.ideas.forEach(i => { openComments[i.id] = open; openTimes[i.id] = open; });
+    render();
+  }
+
+  // ---------- Filters ----------
+  function toggleFilterPanel() {
+    const panel = document.getElementById("filterPanel");
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) {
+      renderTagPicker("filterTagPicker", filters.tags);
+    }
+  }
+  function onFilterInput() {
+    filters.author = document.getElementById("filterAuthor").value.trim().toUpperCase();
+    filters.day = document.getElementById("filterDay").value;
+    filters.starred = document.getElementById("filterStarred").checked;
+    filters.upvoted = document.getElementById("filterUpvoted").checked;
+    filters.reserved = document.getElementById("filterReserved").checked;
+    render();
+  }
+  function clearFilters() {
+    filters = { tags: [], author: "", day: "", starred: false, reserved: false, upvoted: false };
+    document.getElementById("filterAuthor").value = "";
+    document.getElementById("filterDay").value = "";
+    document.getElementById("filterStarred").checked = false;
+    document.getElementById("filterUpvoted").checked = false;
+    document.getElementById("filterReserved").checked = false;
+    renderTagPicker("filterTagPicker", filters.tags);
+    render();
+  }
+  function anyFilterActive() {
+    return filters.tags.length || filters.author || filters.day || filters.starred || filters.reserved || filters.upvoted;
+  }
+  // Does an idea have any suggestion marked "Reservation Made"?
+  function ideaHasReservation(idea) {
+    return data.times.some(t => t.ideaId === idea.id && t.reservation);
+  }
+  // Does an idea match the current filters? (day matches the idea's own date OR any suggested time's date)
+  function ideaMatchesFilters(idea) {
+    if (filters.tags.length && !filters.tags.every(t => (idea.tags || []).includes(t))) return false;
+    if (filters.author && idea.author.toUpperCase() !== filters.author) return false;
+    if (filters.starred && !isStarred(idea.id)) return false;
+    if (filters.upvoted && !(idea.voters || []).includes(me)) return false;
+    if (filters.reserved && !ideaHasReservation(idea)) return false;
+    if (filters.day) {
+      const dayOf = dt => (dt || "").slice(0, 10);   // "YYYY-MM-DD" prefix, "" if time-only
+      const ideaDay = dayOf(idea.datetime) === filters.day;
+      const suggestDay = data.times.some(t => t.ideaId === idea.id && dayOf(t.datetime) === filters.day);
+      if (!ideaDay && !suggestDay) return false;
+    }
+    return true;
+  }
+  // Timestamp of the most recent activity on an idea (idea creation or newest comment).
+  function lastActivity(idea) {
+    let latest = idea.created || 0;
+    data.comments.forEach(c => { if (c.ideaId === idea.id && c.created > latest) latest = c.created; });
+    return latest;
+  }
+  // Number of comments on an idea (used for the "Most Engagement" sort).
+  function commentCount(idea) {
+    return data.comments.filter(c => c.ideaId === idea.id).length;
+  }
+  function deleteIdea(id) { if (confirm("Delete this idea and its comments & scheduling suggestions?")) sendAction({ action: "delete", id }); }
+  // Scroll a just-opened idea section fully into view.
+  function scrollSectionIntoView(id, kind) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById((kind === "time" ? "tinput-" : "cinput-") + id);
+      const row = el ? el.closest(".idea") : null;
+      if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (el) {
+        // Make sure the input itself ends up on-screen.
+        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+      }
+    });
+  }
+
+  function toggleCommentSection(id) {
+    openComments[id] = !openComments[id];
+    render();
+    if (openComments[id]) scrollSectionIntoView(id, "comment");
+  }
+  function toggleTimeSection(id) {
+    openTimes[id] = !openTimes[id];
+    render();
+    if (openTimes[id]) scrollSectionIntoView(id, "time");
+  }
+  function addComment(id) {
+    const input = document.getElementById("cinput-" + id);
+    const text = input.value.trim();
+    if (!text) return;
+    openComments[id] = true;
+    input.value = "";              // clear before send/re-render so the box empties
+    input.blur();
+    sendAction({ action: "comment", ideaId: id, text });
+  }
+  function deleteComment(id) { sendAction({ action: "deleteComment", id }); }
+
+  function startEditComment(id) {
+    editingComment = id;
+    render();
+    requestAnimationFrame(() => {
+      const el = document.getElementById("cedit-" + id);
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    });
+  }
+  function cancelEditComment() { editingComment = null; render(); }
+  function saveEditComment(id) {
+    const el = document.getElementById("cedit-" + id);
+    if (!el) return;
+    const text = el.value.trim();
+    editingComment = null;
+    if (!text) return;   // empty edit: just cancel (use delete to remove)
+    sendAction({ action: "editComment", id, text });
+  }
+
+  function suggestTime(id) {
+    const dateEl = document.getElementById("tdate-" + id);
+    const timeEl = document.getElementById("ttime-" + id);
+    const endEl = document.getElementById("tendtime-" + id);
+    const resEl = document.getElementById("tres-" + id);
+    const dt = combineDateTime(dateEl.value, timeEl.value);
+    if (!dt) return;
+    const endtime = endEl.value;
+    const reservation = resEl.checked;
+    const conflict = checkReservationConflict(dt, endtime, id);
+    if (conflict) {
+      const msg = reservation
+        ? `⚠️ This time overlaps with "${conflict.name}", which already has a Reservation Made. Two reservations can't both lock the same slot — suggest this time anyway?`
+        : `⚠️ This overlaps with "${conflict.name}", which has a Reservation Made. Suggest this time anyway?`;
+      if (!confirm(msg)) return;
+    }
+    openTimes[id] = true;
+    dateEl.value = ""; timeEl.value = ""; endEl.value = ""; resEl.checked = false;   // clear before send/re-render
+    dateEl.blur(); timeEl.blur();
+    sendAction({ action: "suggestTime", ideaId: id, datetime: dt, endtime, reservation });
+  }
+  function voteTime(id) { sendAction({ action: "voteTime", id }); }
+  function deleteTime(id) { sendAction({ action: "deleteTime", id }); }
+
+  // ---------- Editing an existing time suggestion (e.g. toggle Reservation Made) ----------
+  function startEditTime(id) {
+    editingTimeId = id;
+    render();
+  }
+  function cancelEditTime() { editingTimeId = null; render(); }
+  function saveEditTime(id) {
+    const dateEl = document.getElementById("tedate-" + id);
+    const timeEl = document.getElementById("tetime-" + id);
+    const endEl = document.getElementById("teendtime-" + id);
+    const resEl = document.getElementById("teres-" + id);
+    const dt = combineDateTime(dateEl.value, timeEl.value);
+    if (!dt) return;
+    const endtime = endEl.value;
+    const reservation = resEl.checked;
+    const conflict = checkReservationConflict(dt, endtime, null, id);
+    if (conflict) {
+      const msg = reservation
+        ? `⚠️ This time overlaps with "${conflict.name}", which already has a Reservation Made. Two reservations can't both lock the same slot — save anyway?`
+        : `⚠️ This overlaps with "${conflict.name}", which has a Reservation Made. Save anyway?`;
+      if (!confirm(msg)) return;
+    }
+    editingTimeId = null;
+    sendAction({ action: "editTime", id, datetime: dt, endtime, reservation });
+  }
+
+  // Does (date, startTime, endTime) overlap any OTHER idea's reservation-locked schedule?
+  // excludeIdeaId: skip checking against this idea's own schedule (suggesting a time for
+  // the same idea you're already looking at shouldn't warn against itself).
+  // excludeTimeId: when editing an existing suggestion, don't compare it against itself.
+  function checkReservationConflict(datetime, endtime, excludeIdeaId, excludeTimeId) {
+    const parts = splitDateTime(datetime);
+    if (!parts.date) return null;
+    let startMin = timeToMinutes(datetime);
+    if (startMin === null) return null;   // no time part — nothing to overlap
+    let endMin = endtime ? timeToMinutes(endtime) : startMin + 60;
+    if (endMin === null || endMin <= startMin) endMin = startMin + 60;
+    for (const idea of data.ideas) {
+      if (idea.id === excludeIdeaId) continue;
+      const sched = resolveIdeaSchedule(idea);
+      if (!sched || !sched.reserved || sched.date !== parts.date) continue;
+      if (excludeTimeId) {
+        const winning = resolveWinningTimeSuggestion(idea.id);
+        if (winning && winning.id === excludeTimeId) continue;
+      }
+      if (startMin < sched.endMin && endMin > sched.startMin) return idea;
+    }
+    return null;
+  }
+
+  // When the date picker gains focus, scroll the whole idea card to the top of the
+  // viewport so both inputs (and the native calendar that opens downward) stay in frame.
+  function scrollTimeInputUp(id) {
+    const el = document.getElementById("tdate-" + id);
+    const row = el ? el.closest(".idea") : null;
+    const target = row || el;
+    if (!target) return;
+    setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
+
+  // ---------- Edit ----------
+  function openEdit(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea) return;
+    editingId = id;
+    document.getElementById("editName").value = idea.name;
+    document.getElementById("editDesc").value = idea.desc;
+    document.getElementById("editUrl").value = idea.url;
+    const parts = splitDateTime(idea.datetime || "");
+    document.getElementById("editDate").value = parts.date;
+    document.getElementById("editTime").value = parts.time;
+    document.getElementById("editEndTime").value = idea.endtime || "";
+    editTagSel = (idea.tags || []).slice();
+    renderTagPicker("editTagPicker", editTagSel);
+    document.getElementById("editOverlay").classList.remove("hidden");
+  }
+  function closeEdit() { editingId = null; document.getElementById("editOverlay").classList.add("hidden"); }
+  function submitEdit() {
+    const name = document.getElementById("editName").value.trim();
+    if (!name) return;
+    let url = document.getElementById("editUrl").value.trim();
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    const datetime = combineDateTime(document.getElementById("editDate").value, document.getElementById("editTime").value);
+    const endtime = document.getElementById("editEndTime").value;
+    const conflict = checkReservationConflict(datetime, endtime, editingId);
+    if (conflict) {
+      if (!confirm(`⚠️ This overlaps with "${conflict.name}", which has a Reservation Made. Save anyway?`)) return;
+    }
+    sendAction({ action: "edit", id: editingId, name,
+      desc: document.getElementById("editDesc").value.trim(), url,
+      datetime, endtime,
+      tags: editTagSel.join(",") });
+    closeEdit();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Escape text, then turn URLs (and bare www. links) into clickable anchors.
+  // Escaping happens first so this stays safe against injected HTML.
+  function linkify(s) {
+    const escaped = escapeHtml(s);
+    return escaped.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi, match => {
+      // Don't let trailing punctuation get swallowed into the link.
+      const trailing = match.match(/[.,!?;:)]+$/);
+      let urlPart = match, tail = "";
+      if (trailing) { urlPart = match.slice(0, -trailing[0].length); tail = trailing[0]; }
+      const href = /^https?:\/\//i.test(urlPart) ? urlPart : "https://" + urlPart;
+      return `<a class="inline-link" href="${href}" target="_blank" rel="noopener">${urlPart}</a>${tail}`;
+    });
+  }
+
+  // ---------- Render ----------
+  function render() {
+    refreshAddTagPicker();
+    if (activeTab === "calendar") renderCalendar();
+    if (activeTab === "map") renderMap(false);
+    const container = document.getElementById("ideas");
+    const sort = document.getElementById("sort").value;
+    let list = data.ideas.filter(ideaMatchesFilters);
+    if (sort === "votes") list.sort((a,b) => b.voters.length - a.voters.length || b.created - a.created);
+    else if (sort === "updated") list.sort((a,b) => lastActivity(b) - lastActivity(a));
+    else if (sort === "old") list.sort((a,b) => a.created - b.created);
+    else if (sort === "engagement") list.sort((a,b) => commentCount(b) - commentCount(a) || b.created - a.created);
+    else list.sort((a,b) => b.created - a.created);
+
+    // Reflect filter state on the toggle button + summary text.
+    const ft = document.getElementById("filterToggle");
+    if (ft) ft.classList.toggle("filter-active", !!anyFilterActive());
+    const summary = document.getElementById("filterSummary");
+    if (summary) {
+      summary.textContent = anyFilterActive()
+        ? `Showing ${list.length} of ${data.ideas.length}`
+        : "";
+    }
+
+    if (list.length === 0) {
+      const msg = anyFilterActive()
+        ? 'No ideas match your filters.'
+        : 'No ideas yet — be the first to add one!';
+      commitHTML(container, `<div class="empty">${msg}</div>`);
+      return;
+    }
+
+    const html = list.map(idea => {
+      const voted = idea.voters.includes(me);
+      const mine = idea.author === me;
+      const starred = isStarred(idea.id);
+      const hasReservation = ideaHasReservation(idea);
+      const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
+
+      // Comments, sorted per this idea's chosen comment sort ("old" default | "new" | "votes").
+      const cSort = commentSort[idea.id] || "old";
+      const ideaComments = data.comments.filter(c => c.ideaId === idea.id).slice().sort((a,b) => {
+        if (cSort === "votes") return (b.voters ? b.voters.length : 0) - (a.voters ? a.voters.length : 0) || a.created - b.created;
+        if (cSort === "new") return b.created - a.created;
+        return a.created - b.created;   // "old" — oldest first
+      });
+      const isCOpen = openComments[idea.id];
+
+      // Scheduling suggestions, sorted per this idea's chosen time sort ("votes" default | "new").
+      const tSort = timeSort[idea.id] || "votes";
+      const ideaTimes = data.times.filter(t => t.ideaId === idea.id).slice().sort((a,b) => {
+        if (tSort === "new") return b.created - a.created;
+        return b.voters.length - a.voters.length || new Date(a.datetime) - new Date(b.datetime);
+      });
+      const isTOpen = openTimes[idea.id];
+      const maxVotes = ideaTimes.reduce((m,t) => Math.max(m, t.voters.length), 0);
+
+      const commentsHtml = ideaComments.map(c => {
+        if (editingComment === c.id) {
+          return `
+        <div class="comment editing">
+          <span class="cchip">${escapeHtml(c.author)}</span>
+          <div class="cedit-box">
+            <textarea id="cedit-${c.id}" rows="2">${escapeHtml(c.text)}</textarea>
+            <div class="cedit-actions">
+              <button class="btn small ghost" onclick="cancelEditComment()">Cancel</button>
+              <button class="btn small" onclick="saveEditComment('${c.id}')">Save</button>
+            </div>
+          </div>
+        </div>`;
+        }
+        const cVotes = c.voters ? c.voters.length : 0;
+        const cVoted = c.voters && c.voters.includes(me);
+        return `
+        <div class="comment">
+          <span class="cchip">${escapeHtml(c.author)}</span>
+          <span class="ctext">${linkify(c.text)}${c.edited ? '<span class="cedited">(edited)</span>' : ''}</span>
+          <span class="cvote ${cVoted ? 'voted' : ''}" onclick="voteComment('${c.id}')" title="Upvote comment">▲ ${cVotes}</span>
+          ${c.author === me ? `<span class="cedit" onclick="startEditComment('${c.id}')">edit</span><span class="cdel" onclick="deleteComment('${c.id}')">delete</span>` : ""}
+        </div>`;
+      }).join("");
+
+      const timesHtml = ideaTimes.map(t => {
+        if (editingTimeId === t.id) {
+          const eParts = splitDateTime(t.datetime || "");
+          return `
+          <div class="time-row" style="align-items:flex-start;">
+            <div style="flex:1;">
+              <div class="dt-stack" style="margin-bottom:8px;">
+                <div class="date-row"><input id="tedate-${t.id}" type="date" value="${escapeHtml(eParts.date)}" /></div>
+                <div class="time-row-pair">
+                  <input id="tetime-${t.id}" type="time" title="Start time" value="${escapeHtml(eParts.time)}" />
+                  <div class="divider"></div>
+                  <span class="arrow">→</span>
+                  <input id="teendtime-${t.id}" type="time" title="End time (optional)" value="${escapeHtml(t.endtime || "")}" />
+                </div>
+              </div>
+              <label class="reservation-chk"><input type="checkbox" id="teres-${t.id}" ${t.reservation ? "checked" : ""} /> 🔒 Reservation Made (locks this time, always takes priority)</label>
+              <div class="row" style="margin-top:8px;">
+                <button class="btn small ghost" onclick="cancelEditTime()">Cancel</button>
+                <button class="btn small" onclick="saveEditTime('${t.id}')">Save</button>
+              </div>
+            </div>
+          </div>`;
+        }
+        const tVoted = t.voters.includes(me);
+        const isBest = maxVotes > 0 && t.voters.length === maxVotes;
+        const tVoters = t.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
+        return `
+          <div class="time-row">
+            <div class="time-vote ${tVoted ? 'voted' : ''}" onclick="voteTime('${t.id}')">
+              👍 <span>${t.voters.length}</span>
+            </div>
+            <div class="time-label">
+              ${t.reservation ? '<span title="Reservation Made — locked, always takes priority">🔒</span> ' : ''}${escapeHtml(formatDateTime(t.datetime))}${t.endtime ? ` – ${escapeHtml(formatTimeOnly(t.endtime))}` : ''}
+              ${t.reservation ? '<span class="best" style="color:var(--danger)">🔒 reserved</span>' : (isBest ? '<span class="best">★ leading</span>' : '')}
+              <span class="by">by ${escapeHtml(t.author)}</span>
+            </div>
+            <div class="time-voters">${tVoters}</div>
+            ${t.author === me ? `<span class="cedit" onclick="startEditTime('${t.id}')">edit</span><span class="time-del" onclick="deleteTime('${t.id}')">✕</span>` : ""}
+          </div>`;
+      }).join("");
+
+      const tagsHtml = (idea.tags && idea.tags.length)
+        ? `<div class="idea-tags">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>`
+        : "";
+
+      return `
+        <div class="idea" data-idea-id="${idea.id}">
+          <div class="vote">
+            <button class="${voted ? 'voted' : ''}" onclick="toggleVote('${idea.id}')" title="Upvote">▲</button>
+            <span class="count">${idea.voters.length}</span>
+          </div>
+          <div class="idea-body">
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <h3 style="flex:1;">${escapeHtml(idea.name)}</h3>
+              <button class="star-btn ${starred ? 'on' : ''}" onclick="toggleStar('${idea.id}')" title="${starred ? 'Unstar' : 'Star'} (private to you)">${starred ? '★' : '☆'}</button>
+            </div>
+            ${idea.datetime ? `<div class="when"> ${escapeHtml(formatDateTime(idea.datetime))}</div>` : ""}
+            ${hasReservation ? `<div class="reserved-badge">🔒 Reservation Made</div>` : ""}
+            ${tagsHtml}
+            ${idea.desc ? `<p>${linkify(idea.desc)}</p>` : ""}
+            ${idea.url ? `<a class="site" href="${escapeHtml(idea.url)}" target="_blank" rel="noopener">${escapeHtml(idea.url)}</a>` : ""}
+            <div class="meta">
+              <span>Added by</span><span class="chip">${escapeHtml(idea.author)}</span>
+              ${idea.voters.length ? `<span>· Voted by</span><span class="voters">${voterChips}</span>` : ""}
+            </div>
+            ${mine ? `<div class="actions">
+              <button class="link-btn" onclick="openEdit('${idea.id}')">✎ Edit</button>
+              <button class="link-btn" style="color:var(--danger)" onclick="deleteIdea('${idea.id}')">🗑 Delete</button>
+            </div>` : ""}
+            <div>
+              <button class="toggle" onclick="toggleTimeSection('${idea.id}')">
+                🕒 ${ideaTimes.length} scheduling suggestion${ideaTimes.length === 1 ? "" : "s"} ${isTOpen ? "▲" : "▼"}
+              </button>
+              <button class="toggle" onclick="toggleCommentSection('${idea.id}')">
+                💬 ${ideaComments.length} comment${ideaComments.length === 1 ? "" : "s"} ${isCOpen ? "▲" : "▼"}
+              </button>
+            </div>
+            ${isTOpen ? `<div class="times">
+              <div class="section-head">
+                <h4>Suggested days &amp; times</h4>
+                ${ideaTimes.length > 1 ? `<select class="mini-sort" onchange="setTimeSort('${idea.id}', this.value)">
+                  <option value="votes" ${tSort === 'votes' ? 'selected' : ''}>Most upvoted</option>
+                  <option value="new" ${tSort === 'new' ? 'selected' : ''}>Newest</option>
+                </select>` : ""}
+              </div>
+              ${timesHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No scheduling suggestions yet.</div>'}
+              <div class="dt-stack">
+                <div class="date-row"><input id="tdate-${idea.id}" type="date" onfocus="scrollTimeInputUp('${idea.id}')" /></div>
+                <div class="time-row-pair">
+                  <input id="ttime-${idea.id}" type="time" title="Start time" onfocus="scrollTimeInputUp('${idea.id}')" />
+                  <div class="divider"></div>
+                  <span class="arrow">→</span>
+                  <input id="tendtime-${idea.id}" type="time" title="End time (optional)" />
+                </div>
+              </div>
+              <label class="reservation-chk"><input type="checkbox" id="tres-${idea.id}" /> 🔒 Reservation Made (locks this time, always takes priority)</label>
+              <button class="btn small" onclick="suggestTime('${idea.id}')" style="margin-top:8px;">Suggest time</button>
+            </div>` : ""}
+            ${isCOpen ? `<div class="comments">
+              ${ideaComments.length > 1 ? `<div class="section-head">
+                <h4 style="font-size:0.85rem;color:var(--muted);font-weight:600;">Comments</h4>
+                <select class="mini-sort" onchange="setCommentSort('${idea.id}', this.value)">
+                  <option value="old" ${cSort === 'old' ? 'selected' : ''}>Oldest</option>
+                  <option value="new" ${cSort === 'new' ? 'selected' : ''}>Newest</option>
+                  <option value="votes" ${cSort === 'votes' ? 'selected' : ''}>Most upvoted</option>
+                </select>
+              </div>` : ""}
+              ${commentsHtml || '<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">No comments yet.</div>'}
+              <div class="comment-form">
+                <textarea id="cinput-${idea.id}" rows="1" placeholder="Add a comment!"></textarea>
+                <button class="btn small" onclick="addComment('${idea.id}')">Post</button>
+              </div>
+            </div>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+
+    commitHTML(container, html);
+    applyDateLimits();
+  }
+
+  // ---------- Smart DOM commit ----------
+  // Rebuilds the list ONLY when the HTML actually changed, and preserves the
+  // user's focus, caret position, and any unsent text in comment / time inputs.
+  // This is what lets other people's updates appear live without disrupting
+  // whatever the current user is typing (Google-Docs style).
+  let lastHTML = "";
+  function commitHTML(container, html) {
+    if (html === lastHTML) return;   // nothing changed — don't touch the DOM at all
+
+    // Capture the currently focused list input (if any) so we can restore it.
+    const active = document.activeElement;
+    let focusInfo = null;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && active.closest("#ideas")) {
+      focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
+    }
+
+    // Preserve any unsent text the user has typed into comment / time boxes.
+    const drafts = {};
+    container.querySelectorAll("input, textarea").forEach(el => {
+      if (el.id && el.value) drafts[el.id] = el.value;
+    });
+
+    lastHTML = html;
+    container.innerHTML = html;
+
+    // Restore drafts.
+    Object.keys(drafts).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = drafts[id];
+    });
+
+    // Restore focus + caret.
+    if (focusInfo) {
+      const el = document.getElementById(focusInfo.id);
+      if (el) {
+        el.focus();
+        try { el.setSelectionRange(focusInfo.start, focusInfo.end); } catch (e) {}
+      }
+    }
+  }
+
+  // ---------- Tabs ----------
+  function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById("boardView").classList.toggle("hidden", tab !== "board");
+    document.getElementById("calendarView").classList.toggle("hidden", tab !== "calendar");
+    document.getElementById("mapView").classList.toggle("hidden", tab !== "map");
+    document.getElementById("tabBoard").classList.toggle("active", tab === "board");
+    document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
+    document.getElementById("tabMap").classList.toggle("active", tab === "map");
+    if (tab === "calendar") renderCalendar();
+    if (tab === "map") {
+      renderMap(true);
+      // Leaflet measures its container on creation; if that happened while the tab was
+      // hidden (display:none → 0×0), tiles render blank until we tell it to re-measure.
+      requestAnimationFrame(() => { if (map) map.invalidateSize(); });
+    }
+  }
+
+  // ---------- Help ----------
+  function openHelp() { document.getElementById("helpOverlay").classList.remove("hidden"); }
+  function closeHelp() { document.getElementById("helpOverlay").classList.add("hidden"); }
+
+  // ---------- Calendar ----------
+  function daysInCalView() { return calView === "day" ? 1 : (calView === "three" ? 3 : 7); }
+  function dateAdd(dateStr, days) {
+    const d = new Date(dateStr + "T00:00");
+    d.setDate(d.getDate() + days);
+    const pad = n => (n < 10 ? "0" + n : "" + n);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function clampAnchorToRange() {
+    if (calAnchor < TRIP_START) calAnchor = TRIP_START;
+    const maxAnchor = dateAdd(TRIP_END, 1 - daysInCalView());
+    if (calAnchor > maxAnchor) calAnchor = maxAnchor > TRIP_START ? maxAnchor : TRIP_START;
+  }
+  function setCalView(v) {
+    calView = v;
+    clampAnchorToRange();
+    document.getElementById("calViewWeek").classList.toggle("active", v === "week");
+    document.getElementById("calViewThree").classList.toggle("active", v === "three");
+    document.getElementById("calViewDay").classList.toggle("active", v === "day");
+    renderCalendar();
+  }
+  function calNav(dir) {
+    const n = daysInCalView();
+    const next = dateAdd(calAnchor, dir * n);
+    if (next < TRIP_START || next > TRIP_END) return;   // stay within the trip range
+    calAnchor = next;
+    clampAnchorToRange();
+    renderCalendar();
+  }
+
+  const CAL_START_HOUR = 6;    // calendar grid begins at 6am
+  const CAL_END_HOUR = 24;     // ...and ends at midnight
+  const CAL_HOUR_PX = 52;
+
+  function renderCalendar() {
+    const grid = document.getElementById("calGrid");
+    if (!grid) return;
+    clampAnchorToRange();
+    const n = daysInCalView();
+    const days = [];
+    for (let i = 0; i < n; i++) days.push(dateAdd(calAnchor, i));
+
+    // Range label.
+    const fmtLabel = ds => {
+      const d = new Date(ds + "T00:00");
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    };
+    document.getElementById("calRangeLabel").textContent = n === 1 ? fmtLabel(days[0]) : `${fmtLabel(days[0])} – ${fmtLabel(days[days.length - 1])}`;
+
+    // Bucket every idea's resolved schedule by day. Also track the highest vote
+    // count across ALL scheduled ideas (not just the visible days) so the heat-map
+    // scale stays consistent as you navigate between weeks/days.
+    const byDay = {};
+    days.forEach(d => byDay[d] = []);
+    let globalMaxVotes = 0;
+    data.ideas.forEach(idea => {
+      const sched = resolveIdeaSchedule(idea);
+      if (!sched) return;
+      if (!sched.reserved) globalMaxVotes = Math.max(globalMaxVotes, sched.votes);
+      if (byDay[sched.date]) byDay[sched.date].push({ idea, sched });
+    });
+
+    const totalHours = CAL_END_HOUR - CAL_START_HOUR;
+    const gridHeight = totalHours * CAL_HOUR_PX;
+    const todayStr = (() => { const d = new Date(); const pad = x => (x < 10 ? "0"+x : ""+x); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); })();
+
+    // Time column (hour labels).
+    let timeColHtml = '<div class="cal-day-head">&nbsp;</div>';
+    for (let h = CAL_START_HOUR; h < CAL_END_HOUR; h++) {
+      const label = h === 0 ? "12am" : h < 12 ? h + "am" : h === 12 ? "12pm" : (h - 12) + "pm";
+      timeColHtml += `<div class="cal-hour">${label}</div>`;
+    }
+
+    // Each day's column: header + absolutely-positioned event blocks over hour lines.
+    const dayColsHtml = days.map(dayStr => {
+      const d = new Date(dayStr + "T00:00");
+      const isToday = dayStr === todayStr;
+      let hourLines = "";
+      for (let h = CAL_START_HOUR; h < CAL_END_HOUR; h++) hourLines += `<div class="cal-hourline"></div>`;
+
+      // Sort by priority (reservation first, then most votes) so overlap layout
+      // places the most-important item furthest LEFT.
+      const items = byDay[dayStr].slice().sort((a, b) => {
+        if (a.sched.reserved !== b.sched.reserved) return a.sched.reserved ? -1 : 1;
+        return b.sched.votes - a.sched.votes;
+      });
+
+      // Simple overlap-column assignment: walk items in priority order, place each
+      // into the first column where it doesn't overlap anything already placed there.
+      const columns = [];   // columns[i] = array of {startMin, endMin} already placed
+      const placement = items.map(item => {
+        const { startMin, endMin } = item.sched;
+        let col = 0;
+        while (columns[col] && columns[col].some(o => startMin < o.endMin && endMin > o.startMin)) col++;
+        if (!columns[col]) columns[col] = [];
+        columns[col].push({ startMin, endMin });
+        return { item, col };
+      });
+      const maxCol = placement.reduce((m, p) => Math.max(m, p.col), 0);
+      const totalCols = maxCol + 1;
+
+      const eventsHtml = placement.map(({ item, col }) => {
+        const { idea, sched } = item;
+        const top = Math.max(0, (sched.startMin - CAL_START_HOUR * 60) / 60 * CAL_HOUR_PX);
+        const height = Math.max(20, (sched.endMin - sched.startMin) / 60 * CAL_HOUR_PX - 2);
+        const widthPct = 100 / totalCols;
+        const leftPct = col * widthPct;
+        const cls = ["cal-event"];
+        if (sched.reserved) cls.push("reserved");
+        if (sched.unverifiedEnd) cls.push("unverified");
+        const bg = eventBackground(sched, globalMaxVotes);
+        const timeLabel = `${formatTimeOnly(minutesToTimeStr(sched.startMin))}–${formatTimeOnly(minutesToTimeStr(sched.endMin))}`;
+        return `<div class="${cls.join(' ')}" style="top:${top}px; height:${height}px; left:calc(${leftPct}% + 2px); width:calc(${widthPct}% - 4px); background:${bg};" onclick="jumpToIdea('${idea.id}')" title="${escapeHtml(idea.name)} — ${escapeHtml(timeLabel)} · ${sched.votes} vote${sched.votes===1?'':'s'}${sched.reserved ? ' (Reservation Made)' : ''}${sched.unverifiedEnd ? ' — end time not verified, defaulted to 1hr' : ''}">
+          <span class="ce-name">${sched.reserved ? '<span class="ce-lock">🔒</span>' : ''}${escapeHtml(idea.name)}</span>
+          <span class="ce-time">${escapeHtml(timeLabel)}</span>
+        </div>`;
+      }).join("");
+
+      return `<div class="cal-day-col">
+        <div class="cal-day-head ${isToday ? 'today' : ''}">${d.toLocaleDateString(undefined,{weekday:'short'})}<span class="dnum">${d.getDate()}</span></div>
+        <div class="cal-slots" style="height:${gridHeight}px;">${hourLines}${eventsHtml}</div>
+      </div>`;
+    }).join("");
+
+    const hasAnyEvents = days.some(d => byDay[d].length > 0);
+    grid.innerHTML = `<div class="cal-grid">
+        <div class="cal-time-col">${timeColHtml}</div>
+        ${dayColsHtml}
+      </div>
+      ${hasAnyEvents ? "" : '<div class="cal-empty-note">No scheduled or suggested times in this range yet.</div>'}`;
+  }
+
+  // Heat-map color for a calendar event based on its vote count relative to the
+  // most-voted idea currently on the calendar: desaturated yellow (fewest votes)
+  // → saturated orange (most votes). Reservations always use a fixed red "locked"
+  // color instead (votes don't matter for them — they always win regardless).
+  function heatColor(votes, maxVotes) {
+    const t = maxVotes > 0 ? Math.max(0, Math.min(1, votes / maxVotes)) : 0;
+    const hue = 48 - t * 13;      // 48 = yellow → 35 = orange, as votes increase
+    const sat = 35 + t * 55;      // desaturated (few votes) → saturated (most votes)
+    const light = 62 - t * 10;
+    return `hsl(${hue}, ${sat}%, ${light}%)`;
+  }
+  function eventBackground(sched, globalMaxVotes) {
+    if (sched.reserved) {
+      return sched.unverifiedEnd
+        ? "repeating-linear-gradient(135deg, rgba(239,68,68,0.95), rgba(239,68,68,0.95) 8px, rgba(190,60,60,0.95) 8px, rgba(190,60,60,0.95) 16px)"
+        : "rgba(239,68,68,0.92)";
+    }
+    const c = heatColor(sched.votes, globalMaxVotes);
+    if (sched.unverifiedEnd) {
+      return `repeating-linear-gradient(135deg, ${c}, ${c} 8px, rgba(148,163,184,0.85) 8px, rgba(148,163,184,0.85) 16px)`;
+    }
+    return c;
+  }
+
+  // Clicking a calendar event switches to the Board tab and opens that idea's time section.
+  function jumpToIdea(id) {
+    switchTab("board");
+    openTimes[id] = true;
+    render();
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`.idea[data-idea-id="${id}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.remove("jump-highlight");
+        void row.offsetWidth;   // restart the animation even if clicked again quickly
+        row.classList.add("jump-highlight");
+        setTimeout(() => row.classList.remove("jump-highlight"), 2300);
+      }
+    });
+  }
+
+  // ---------- Google Maps export ----------
+  // Google exposes no API for writing to a user's saved "Lists", so we resolve each
+  // filtered idea to the best Maps target we can and offer two paths: a My Maps CSV
+  // (bulk import, geocoded automatically) or per-idea links to Save manually.
+
+  // A Google Maps URL anywhere in a string (maps.google.*, google.*/maps, goo.gl/maps, maps.app.goo.gl).
+  const MAPS_URL_RE = /https?:\/\/(?:www\.)?(?:maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z.]+|(?:www\.)?google\.[a-z.]+\/maps)[^\s<]*/i;
+
+  // A street address in either English suffix order ("1234 Sainte-Catherine St") or
+  // French/Spanish prefix order ("158 Rue Saint-Viateur Ouest"). Street-name tokens must
+  // be Capitalized (or an ordinal like "12th", or a French particle like "du"/"de la"),
+  // which is what keeps prose out — "Sit at table 3 Rue side" correctly finds nothing.
+  // Intentionally case-SENSITIVE: capitalization is the main signal here.
+  const ADDR_NAME = "(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’\\-]*|\\d{1,3}(?:st|nd|rd|th)|du|de|des|la|le|les|d'|l')";
+  const ADDR_SUFFIX = "(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Square|Sq|Terrace|Ter|Parkway|Pkwy|Highway|Hwy)";
+  const ADDR_PREFIX = "(?:Rue|Avenue|Av|Boulevard|Boul|Bd|Chemin|Ch|Place|Impasse|Allee|Allée|Quai|Cours|Via|Calle|Plaza)";
+  const ADDR_CITY = "(?:\\s*,\\s*[A-ZÀ-Þ][A-Za-zÀ-ÿ'’.\\- ]{1,39}){0,2}";
+  const ADDRESS_RE = new RegExp(
+    "\\b\\d{1,5}[A-Za-z]?(?:\\s*,)?\\s+(?:" +
+      ADDR_PREFIX + "\\s+" + ADDR_NAME + "(?:\\s+" + ADDR_NAME + "){0,3}" +
+      "|" +
+      "(?:" + ADDR_NAME + "\\s+){1,4}" + ADDR_SUFFIX + "\\b\\.?" +
+    ")" + ADDR_CITY);
+
+  function findMapsUrl(idea) {
+    for (const field of [idea.url, idea.desc]) {
+      const m = String(field || "").match(MAPS_URL_RE);
+      if (m) return m[0];
+    }
+    return null;
+  }
+  function findAddress(idea) {
+    const m = String(idea.desc || "").match(ADDRESS_RE);
+    return m ? m[0].trim().replace(/[.,;:]+$/, "") : null;
+  }
+
+  // Append the trip city for geocoding accuracy, unless the text already names it.
+  function withCity(text) {
+    if (!TRIP_CITY) return text;
+    const firstCityWord = TRIP_CITY.split(",")[0].trim();
+    if (firstCityWord && new RegExp("\\b" + firstCityWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text)) return text;
+    return text + ", " + TRIP_CITY;
+  }
+
+  // Resolve one idea → { idea, kind, query, url }
+  //   kind "link"    — an explicit Google Maps URL was found (used verbatim)
+  //   kind "address" — a street address was parsed out of the description
+  //   kind "name"    — fallback: search the idea's name, Maps picks the first result
+  function resolveMapsTarget(idea) {
+    const link = findMapsUrl(idea);
+    if (link) return { idea, kind: "link", query: link, url: link };
+    const addr = findAddress(idea);
+    if (addr) {
+      const q = withCity(addr);
+      return { idea, kind: "address", query: q, url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) };
+    }
+    const q = withCity(idea.name);
+    return { idea, kind: "name", query: q, url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) };
+  }
+
+  // The currently-filtered ideas, in the Board's current sort order.
+  function currentMapsTargets() {
+    return data.ideas.filter(ideaMatchesFilters).map(resolveMapsTarget);
+  }
+
+  let mapsTargets = [];
+  function openMapsExport() {
+    mapsTargets = currentMapsTargets();
+    document.getElementById("mapsCount").textContent = mapsTargets.length;
+
+    const KIND_LABEL = { link: "🔗 Maps link", address: "📮 address", name: "🔎 name search" };
+    document.getElementById("mapsLinkList").innerHTML = mapsTargets.length
+      ? mapsTargets.map(t => `<div style="margin-bottom:6px; font-size:0.85rem;">
+          <a class="inline-link" href="${escapeHtml(t.url)}" target="_blank" rel="noopener">${escapeHtml(t.idea.name)}</a>
+          <span style="color:var(--muted); font-size:0.75rem; margin-left:6px;">${KIND_LABEL[t.kind]}</span>
+        </div>`).join("")
+      : '<div style="color:var(--muted); font-size:0.85rem;">No ideas match the current filters.</div>';
+
+    const counts = mapsTargets.reduce((a, t) => { a[t.kind] = (a[t.kind] || 0) + 1; return a; }, {});
+    document.getElementById("mapsResolveSummary").innerHTML =
+      `<div style="font-size:0.82rem; color:var(--muted);">
+         🔗 ${counts.link || 0} from a Maps link · 📮 ${counts.address || 0} from an address · 🔎 ${counts.name || 0} by name search
+       </div>`;
+
+    document.getElementById("mapsOverlay").classList.remove("hidden");
+  }
+  function closeMapsExport() { document.getElementById("mapsOverlay").classList.add("hidden"); }
+
+  function csvCell(s) { return `"${String(s == null ? "" : s).replace(/"/g, '""')}"`; }
+  // Collapse newlines/tabs so multi-line descriptions stay on one CSV row — My Maps'
+  // importer is unreliable with embedded line breaks even inside quoted cells.
+  function csvFlatten(s) { return String(s == null ? "" : s).replace(/[\r\n\t]+/g, " ").trim(); }
+
+  function downloadMapsCsv() {
+    if (!mapsTargets.length) return;
+    // The header row must be written RAW — unquoted and with no BOM. Google My Maps
+    // doesn't strip quotes from header cells, so `"Name"` is read as a column literally
+    // named `"Name"`, and it rejects the upload because `"` is an illegal name character
+    // ("Column names must be unique and cannot be longer than 64 characters or include
+    // these characters: " < > { } |"). A BOM would likewise become part of column 1's
+    // name. These names are plain ASCII with no commas/quotes, so raw is safe.
+    const header = ["Name", "Location", "Notes", "Website", "Tags", "Votes"].join(",");
+    const body = mapsTargets.map(t => [
+      csvFlatten(t.idea.name), csvFlatten(t.query), csvFlatten(t.idea.desc),
+      csvFlatten(t.idea.url), (t.idea.tags || []).join(" / "), (t.idea.voters || []).length
+    ].map(csvCell).join(","));
+    const csv = [header].concat(body).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "idea-board-maps.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function copyMapsLinks() {
+    if (!mapsTargets.length) return;
+    const text = mapsTargets.map(t => `${t.idea.name} — ${t.url}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Copied " + mapsTargets.length + " link(s) to your clipboard.");
+    } catch (e) {
+      // Clipboard API needs a secure context / permission — fall back to a prompt.
+      prompt("Copy these links:", text);
+    }
+  }
+
+  // ---------- Map tab (Leaflet + OpenStreetMap) ----------
+  // Coordinates are geocoded ONCE by the backend and cached in the Sheet (lat/lng
+  // columns), so opening this tab never triggers geocoding on its own. No API key
+  // and no billing account is involved — OSM tiles + Apps Script's Maps.newGeocoder().
+
+  const MAP_DEFAULT_CENTER = [45.5019, -73.5674];   // Montreal; only used before pins load
+  const MAP_DEFAULT_ZOOM = 13;
+
+  let map = null;                 // the Leaflet map instance (created lazily)
+  let pinLayer = null;            // LayerGroup holding idea pins
+  let mePin = null;               // marker for the user's own location
+  let myLatLng = null;            // [lat, lng] once geolocation succeeds
+  let geocodeBusy = false;
+  let lastPinKey = "";            // skip re-pinning when nothing relevant changed
+
+  function ideasWithCoords(list) {
+    return list.filter(i => typeof i.lat === "number" && isFinite(i.lat) &&
+                            typeof i.lng === "number" && isFinite(i.lng));
+  }
+
+  // Great-circle distance in km (haversine).
+  function distanceKm(a, b) {
+    const R = 6371, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b[0] - a[0]), dLng = toRad(b[1] - a[1]);
+    const s = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+  function formatDistance(km) {
+    if (km < 1) return Math.round(km * 1000) + " m";
+    return (km < 10 ? km.toFixed(1) : Math.round(km)) + " km";
+  }
+
+  function ensureMap() {
+    if (map) return map;
+    map = L.map("mapCanvas", { zoomControl: true, scrollWheelZoom: true })
+           .setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      className: "map-tiles",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    pinLayer = L.layerGroup().addTo(map);
+    return map;
+  }
+
+  // Build one pin. Reuses the calendar's heat-map palette so colors mean the same
+  // thing in both views: red = reservation, yellow→orange = fewest→most votes.
+  function makePinIcon(idea, maxVotes, reserved) {
+    const votes = (idea.voters || []).length;
+    const bg = reserved ? "rgba(239,68,68,0.95)" : heatColor(votes, maxVotes);
+    return L.divIcon({
+      className: "",
+      html: `<div class="map-pin ${reserved ? "reserved" : ""}" style="background:${bg}">${reserved ? "🔒" : votes}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      popupAnchor: [0, -14]
+    });
+  }
+
+  function popupHtml(idea) {
+    const votes = (idea.voters || []).length;
+    const sched = resolveIdeaSchedule(idea);
+    const when = sched ? formatDateTime(sched.date + "T" + minutesToTimeStr(sched.startMin)) : "";
+    const gQuery = encodeURIComponent(withCity(idea.name));
+    const tags = (idea.tags || []).length
+      ? `<div class="idea-tags" style="margin:4px 0 6px;">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>` : "";
+    return `<div class="map-pop">
+      <h4>${escapeHtml(idea.name)}</h4>
+      <div class="mp-meta">▲ ${votes} vote${votes === 1 ? "" : "s"} · by ${escapeHtml(idea.author)}${when ? " · " + escapeHtml(when) : ""}${ideaHasReservation(idea) ? " · 🔒 reserved" : ""}</div>
+      ${tags}
+      ${idea.desc ? `<div class="mp-desc">${escapeHtml(idea.desc)}</div>` : ""}
+      <div class="mp-actions">
+        <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🧭 Google</a>
+        <a href="https://maps.apple.com/?daddr=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🍎 Apple</a>
+        <a href="https://www.google.com/maps/search/?api=1&query=${gQuery}" target="_blank" rel="noopener">🔎 Search</a>
+      </div>
+    </div>`;
+  }
+
+  function renderMap(force) {
+    if (activeTab !== "map") return;
+    ensureMap();
+
+    const filtered = data.ideas.filter(ideaMatchesFilters);
+    const mapped = ideasWithCoords(filtered);
+
+    // Only rebuild pins when something that affects them actually changed.
+    const key = JSON.stringify(mapped.map(i => [i.id, i.lat, i.lng, (i.voters || []).length, ideaHasReservation(i)]));
+    if (!force && key === lastPinKey) { renderNearby(mapped); return; }
+    lastPinKey = key;
+
+    pinLayer.clearLayers();
+    const maxVotes = mapped.reduce((m, i) => Math.max(m, (i.voters || []).length), 0);
+    mapped.forEach(idea => {
+      const reserved = ideaHasReservation(idea);
+      L.marker([idea.lat, idea.lng], { icon: makePinIcon(idea, maxVotes, reserved), title: idea.name })
+       .bindPopup(popupHtml(idea), { maxWidth: 280 })
+       .addTo(pinLayer);
+    });
+
+    // Report anything the geocoder couldn't place, with a retry affordance.
+    const unmapped = filtered.filter(i => !mapped.includes(i));
+    const box = document.getElementById("mapUnmapped");
+    if (unmapped.length) {
+      const failed = unmapped.filter(i => String(i.geocodedFrom || "").indexOf("failed") === 0);
+      box.classList.remove("hidden");
+      box.innerHTML = `${unmapped.length} idea${unmapped.length === 1 ? "" : "s"} not on the map` +
+        (failed.length ? ` (${failed.length} couldn't be located)` : ` (not resolved yet)`) +
+        `: ${unmapped.slice(0, 6).map(i => escapeHtml(i.name)).join(", ")}${unmapped.length > 6 ? "…" : ""}` +
+        ` <button class="link-btn" onclick="runGeocodePass(true)" style="margin-left:6px">retry</button>`;
+    } else {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    }
+
+    document.getElementById("mapStatus").textContent =
+      `${mapped.length} of ${filtered.length} shown` + (anyFilterActive() ? " (filtered)" : "");
+
+    if (!force && mapped.length) fitMapToPins();
+    renderNearby(mapped);
+  }
+
+  function fitMapToPins() {
+    if (!map) return;
+    const pts = ideasWithCoords(data.ideas.filter(ideaMatchesFilters)).map(i => [i.lat, i.lng]);
+    if (myLatLng) pts.push(myLatLng);
+    if (!pts.length) return;
+    if (pts.length === 1) { map.setView(pts[0], 15); return; }
+    map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 16 });
+  }
+
+  // Ask for the user's location. Requires HTTPS — fine on GitHub Pages.
+  function locateMe() {
+    const btn = document.getElementById("mapLocateBtn");
+    if (!navigator.geolocation) { alert("This browser doesn't support location sharing."); return; }
+    const original = btn.textContent;
+    btn.textContent = "locating…"; btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        myLatLng = [pos.coords.latitude, pos.coords.longitude];
+        ensureMap();
+        if (mePin) map.removeLayer(mePin);
+        mePin = L.marker(myLatLng, {
+          icon: L.divIcon({ className: "", html: '<div class="map-pin me-pin">●</div>', iconSize: [26, 26], iconAnchor: [13, 13] }),
+          title: "You are here", zIndexOffset: 1000
+        }).bindPopup("<b>You are here</b>").addTo(map);
+        btn.textContent = original; btn.disabled = false;
+        fitMapToPins();
+        renderNearby(ideasWithCoords(data.ideas.filter(ideaMatchesFilters)));
+      },
+      err => {
+        btn.textContent = original; btn.disabled = false;
+        const msg = err.code === 1
+          ? "Location permission was denied. You can enable it in your browser's site settings."
+          : "Couldn't get your location (" + err.message + ").";
+        alert(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  // "Nearest ideas" list — only meaningful once we know where the user is.
+  function renderNearby(mapped) {
+    const box = document.getElementById("mapNearby");
+    if (!myLatLng || !mapped.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const rows = mapped
+      .map(i => ({ idea: i, km: distanceKm(myLatLng, [i.lat, i.lng]) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 8)
+      .map(({ idea, km }) => `<div class="map-nearby-row" onclick="focusPin('${idea.id}')">
+          <span class="mn-dist">${formatDistance(km)}</span>
+          <span class="mn-name">${escapeHtml(idea.name)}</span>
+          <span style="color:var(--muted); font-size:0.75rem;">▲ ${(idea.voters || []).length}</span>
+        </div>`).join("");
+    box.classList.remove("hidden");
+    box.innerHTML = `<h3>Nearest to you</h3>${rows}`;
+  }
+
+  // Center the map on one idea and open its popup.
+  function focusPin(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea || !map) return;
+    map.setView([idea.lat, idea.lng], 16);
+    pinLayer.eachLayer(l => {
+      const ll = l.getLatLng();
+      if (Math.abs(ll.lat - idea.lat) < 1e-9 && Math.abs(ll.lng - idea.lng) < 1e-9) l.openPopup();
+    });
+  }
+
+  // Ask the backend to geocode any ideas missing coordinates. Batched server-side,
+  // so this loops until nothing remains (or a batch makes no progress).
+  async function runGeocodePass(force) {
+    if (!useBackend) { alert("Geocoding needs the Google Apps Script backend (API_URL is blank)."); return; }
+    if (geocodeBusy) return;
+    geocodeBusy = true;
+    const btn = document.getElementById("mapGeocodeBtn");
+    const original = btn.textContent;
+    btn.disabled = true;
+    try {
+      let guard = 0;
+      while (guard++ < 10) {
+        btn.textContent = "resolving…";
+        writeSeq++;              // invalidate any poll fetch already in flight
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: force && guard === 1 ? "regeocode" : "geocodeMissing", author: me })
+        });
+        const json = await res.json();
+        if (!json || !json.ideas) break;
+        if (!json.times) json.times = [];
+        data = json; setSync(true);
+        renderMap(true);
+        const info = json.geocode || {};
+        if (!info.remaining || !info.geocoded) break;   // done, or making no progress
+      }
+    } catch (err) {
+      setSync(false);
+      alert("Couldn't reach the backend to resolve locations. Check your connection and try again.");
+    } finally {
+      geocodeBusy = false;
+      btn.disabled = false;
+      btn.textContent = original;
+      render();
+    }
+  }
+
+  // ---------- Live updating ----------
+  // Thanks to commitHTML() preserving focus, caret and drafts, we can now pull
+  // live updates even while the user is typing a comment or new idea.
+  // The ONE thing we can't safely rebuild through is an OPEN native date-picker
+  // (a DOM replace can't reopen the calendar), so we pause only for that.
+  function datePickerFocused() {
+    const el = document.activeElement;
+    return el && (el.type === "datetime-local" || el.type === "date" || el.type === "time") && el.closest("#ideas") !== null;
+  }
+
+  async function poll() {
+    if (busy || geocodeBusy || editingId || editingComment || editingTimeId || datePickerFocused()) return;
+    await fetchData();
+    render();
+  }
+
+  async function manualRefresh() {
+    const btn = document.getElementById("refreshBtn");
+    if (btn && btn.dataset.busy === "1") return;   // ignore taps mid-refresh
+    const original = btn ? btn.textContent : "";
+    if (btn) { btn.dataset.busy = "1"; btn.textContent = "refreshing…"; }
+    const started = Date.now();
+    await fetchData();
+    render();
+    // keep the message visible briefly so it's noticeable even on fast refreshes
+    const wait = Math.max(0, 500 - (Date.now() - started));
+    setTimeout(() => {
+      if (btn) { btn.textContent = original; btn.dataset.busy = ""; }
+    }, wait);
+  }
+
+  // ---------- Init ----------
+  // Constrain every date input to the trip range (TRIP_START..TRIP_END).
+  // Called on init and after each render, since some date inputs (suggest-time)
+  // are recreated whenever the ideas list re-renders.
+  // We also default empty entry pickers to TRIP_START so the native calendar
+  // reliably OPENS on the trip month across all browsers — otherwise many
+  // browsers open on today's month (outside the range) and the graying/limits
+  // aren't visible until the user manually navigates to October 2026.
+  function applyDateLimits() {
+    document.querySelectorAll('input[type="date"]').forEach(el => {
+      el.min = TRIP_START;
+      el.max = TRIP_END;
+      // Prime the calendar to open on the trip month WITHOUT auto-selecting a day.
+      // (Attach handlers once per element.)
+      if (!el.dataset.primeWired) {
+        el.dataset.primeWired = "1";
+        el.addEventListener("focus", () => {
+          // Seed with the trip start only to position the calendar; mark it so we
+          // can revert on blur if the user never actually commits a pick.
+          if (!el.value) { el.value = TRIP_START; el.dataset.primed = "1"; }
+        });
+        el.addEventListener("change", () => {
+          // A real selection — the value sticks, so drop the primed mark.
+          delete el.dataset.primed;
+        });
+        el.addEventListener("blur", () => {
+          // Left without picking anything → restore the blank state.
+          if (el.dataset.primed) {
+            el.value = "";
+            delete el.dataset.primed;
+            if (el.id === "filterDay") onFilterInput();
+          }
+        });
+      }
+    });
+  }
+
+  async function init() {
+    if (!useBackend) document.getElementById("configBanner").classList.remove("hidden");
+    setSync(false);
+    checkUser();
+    applyAddIdeaCollapsed((localStorage.getItem(STORE_ADD_COLLAPSED) ?? "1") === "1");
+    await fetchData();
+    render();
+    renderTagPicker("ideaTagPicker", ideaTagSel);
+    applyDateLimits();
+    document.getElementById("calViewWeek").classList.add("active");
+    setInterval(poll, POLL_MS);
+  }
+  init();
+</script>
+</body>
+</html>
