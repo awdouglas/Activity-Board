@@ -597,6 +597,29 @@
     </div>
   </div>
 
+  <div class="overlay hidden" id="locOverlay" onclick="if(event.target===this) closeLocationEditor()">
+    <div class="modal wide">
+      <h2>📍 Set location</h2>
+      <p id="locIdeaName" style="color:var(--text); font-weight:600; margin:0 0 4px;"></p>
+      <p id="locCurrent" style="font-size:0.78rem;"></p>
+      <label for="locInput">Address, coordinates, or a Google / Apple Maps link</label>
+      <textarea id="locInput" rows="3" placeholder="1432 Rue Mackay, Montreal
+45.4952, -73.5793
+https://maps.app.goo.gl/…
+https://maps.apple.com/?ll=…"></textarea>
+      <div style="font-size:0.75rem; color:var(--muted); margin:-6px 0 14px;">
+        Any of these work — a street address, a <b>lat, lng</b> pair, or a share link from
+        Google or Apple Maps (short links are expanded automatically).
+      </div>
+      <div id="locError" class="map-warn hidden" style="margin-bottom:12px;"></div>
+      <div class="row">
+        <button class="btn ghost" style="flex:1" onclick="closeLocationEditor()">Cancel</button>
+        <button class="btn ghost" style="flex:1" onclick="clearLocationOverride()" title="Clear the saved coordinates and let automatic resolution try again">↺ Reset</button>
+        <button class="btn" style="flex:1" id="locSaveBtn" onclick="saveLocationOverride()">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap" id="pageWrap">
     <header>
       <h1>Montreal Idea Board</h1>
@@ -659,14 +682,14 @@
       </select>
     </div>
     <div class="toolbar">
-      <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel()">⚙ Filters</button>
+      <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel('board')">⚙ Filters</button>
       <button class="btn small ghost" onclick="expandAll(true)">⊕ Expand all</button>
       <button class="btn small ghost" onclick="expandAll(false)">⊖ Collapse all</button>
       <button class="btn small ghost" id="exportMapsBtn" onclick="openMapsExport()">📍 Export to Maps</button>
       <span class="grow"></span>
       <span id="filterSummary" style="font-size:0.75rem; color:var(--muted);"></span>
     </div>
-    <div class="filter-panel hidden" id="filterPanel">
+    <div id="boardFilterMount"><div class="filter-panel hidden" id="filterPanel">
       <div class="frow">
         <label>Filter by tags</label>
         <div class="tag-picker" id="filterTagPicker"></div>
@@ -693,7 +716,7 @@
       <div class="frow">
         <button class="btn small ghost" onclick="clearFilters()">Clear all filters</button>
       </div>
-    </div>
+    </div></div><!-- /filterPanel /boardFilterMount -->
     <div class="ideas" id="ideas"></div>
     </div><!-- /boardView -->
 
@@ -719,12 +742,17 @@
 
     <div id="mapView" class="hidden">
       <div class="map-toolbar">
+        <button class="btn small ghost" id="mapFilterToggle" onclick="toggleFilterPanel('map')">⚙ Filters</button>
         <button class="btn small ghost" id="mapLocateBtn" onclick="locateMe()">📍 Find my location</button>
         <button class="btn small ghost" id="mapFitBtn" onclick="fitMapToPins()">⤢ Fit all pins</button>
         <button class="btn small ghost" id="mapGeocodeBtn" onclick="runGeocodePass(false)">🔄 Resolve missing pins</button>
         <span class="grow"></span>
         <span id="mapStatus" style="font-size:0.75rem; color:var(--muted);"></span>
       </div>
+      <!-- The filter panel is a single shared element that gets moved between the Board
+           and Map tabs (see mountFilterPanel), so both views always share one filter
+           state and there's no duplicated markup to keep in sync. -->
+      <div id="mapFilterMount"></div>
       <div class="map-warn hidden" id="mapUnmapped"></div>
       <div id="mapCanvas"></div>
       <div class="cal-legend" style="margin-top:10px;">
@@ -1119,7 +1147,7 @@
     const i = arr.indexOf(tag);
     if (i === -1) arr.push(tag); else arr.splice(i, 1);
     renderTagPicker(containerId, arr);
-    if (containerId === "filterTagPicker") render();
+    if (containerId === "filterTagPicker") { render(); if (activeTab === "map") renderMap(true); syncFilterButtons(); }
   }
   function addCustomTag(containerId) {
     const raw = prompt("Enter a custom tag:");
@@ -1129,7 +1157,7 @@
     const arr = selArrFor(containerId);
     if (!arr.includes(tag)) arr.push(tag);
     renderTagPicker(containerId, arr);
-    if (containerId === "filterTagPicker") render();
+    if (containerId === "filterTagPicker") { render(); if (activeTab === "map") renderMap(true); syncFilterButtons(); }
   }
 
   // ---------- Submit new idea ----------
@@ -1165,12 +1193,35 @@
   }
 
   // ---------- Filters ----------
-  function toggleFilterPanel() {
+  // There is ONE filter panel element, shared by the Board and Map tabs. Opening it on a
+  // tab physically moves it into that tab's mount point, so filter state can never drift
+  // between the two views and the markup exists in only one place.
+  function mountFilterPanel(where) {
     const panel = document.getElementById("filterPanel");
-    panel.classList.toggle("hidden");
+    const mount = document.getElementById(where === "map" ? "mapFilterMount" : "boardFilterMount");
+    if (panel && mount && panel.parentElement !== mount) mount.appendChild(panel);
+  }
+  function toggleFilterPanel(where) {
+    const target = where || (activeTab === "map" ? "map" : "board");
+    const panel = document.getElementById("filterPanel");
+    const movingTabs = panel.parentElement !==
+      document.getElementById(target === "map" ? "mapFilterMount" : "boardFilterMount");
+    mountFilterPanel(target);
+    // If it was already open on the OTHER tab, keep it open here rather than toggling shut.
+    if (movingTabs) panel.classList.remove("hidden");
+    else panel.classList.toggle("hidden");
     if (!panel.classList.contains("hidden")) {
       renderTagPicker("filterTagPicker", filters.tags);
     }
+    syncFilterButtons();
+  }
+  // Keep both ⚙ Filters buttons reflecting whether any filter is active.
+  function syncFilterButtons() {
+    const on = !!anyFilterActive();
+    ["filterToggle", "mapFilterToggle"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("filter-active", on);
+    });
   }
   function onFilterInput() {
     filters.author = document.getElementById("filterAuthor").value.trim().toUpperCase();
@@ -1179,6 +1230,8 @@
     filters.upvoted = document.getElementById("filterUpvoted").checked;
     filters.reserved = document.getElementById("filterReserved").checked;
     render();
+    if (activeTab === "map") renderMap(true);   // pins must follow the filters immediately
+    syncFilterButtons();
   }
   function clearFilters() {
     filters = { tags: [], author: "", day: "", starred: false, reserved: false, upvoted: false };
@@ -1189,6 +1242,8 @@
     document.getElementById("filterReserved").checked = false;
     renderTagPicker("filterTagPicker", filters.tags);
     render();
+    if (activeTab === "map") renderMap(true);
+    syncFilterButtons();
   }
   function anyFilterActive() {
     return filters.tags.length || filters.author || filters.day || filters.starred || filters.reserved || filters.upvoted;
@@ -1667,11 +1722,16 @@
     document.getElementById("tabMap").classList.toggle("active", tab === "map");
     if (tab === "calendar") renderCalendar();
     if (tab === "map") {
+      // Carry the filter panel over so it stays usable (and visible) on this tab.
+      mountFilterPanel("map");
       renderMap(true);
       // Leaflet measures its container on creation; if that happened while the tab was
       // hidden (display:none → 0×0), tiles render blank until we tell it to re-measure.
       requestAnimationFrame(() => { if (map) map.invalidateSize(); });
+    } else if (tab === "board") {
+      mountFilterPanel("board");
     }
+    syncFilterButtons();
   }
 
   // ---------- Help ----------
@@ -2044,9 +2104,13 @@
     const votes = (idea.voters || []).length;
     const sched = resolveIdeaSchedule(idea);
     const when = sched ? formatDateTime(sched.date + "T" + minutesToTimeStr(sched.startMin)) : "";
-    const gQuery = encodeURIComponent(withCity(idea.name));
     const tags = (idea.tags || []).length
       ? `<div class="idea-tags" style="margin:4px 0 6px;">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>` : "";
+    // Search/directions links use the pin's COORDINATES, not the idea's name — a name
+    // search re-introduces the ambiguity the pin already resolved (e.g. a chain with
+    // several branches would send you to the wrong one).
+    const ll = `${idea.lat},${idea.lng}`;
+    const gLabel = encodeURIComponent(idea.name);
     return `<div class="map-pop">
       <h4>${escapeHtml(idea.name)}</h4>
       <div class="mp-meta">▲ ${votes} vote${votes === 1 ? "" : "s"} · by ${escapeHtml(idea.author)}${when ? " · " + escapeHtml(when) : ""}${ideaHasReservation(idea) ? " · 🔒 reserved" : ""}</div>
@@ -2054,10 +2118,11 @@
       ${idea.desc ? `<div class="mp-desc">${escapeHtml(idea.desc)}</div>` : ""}
       <div class="mp-actions">
         <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🧭 Google</a>
-        <a href="https://maps.apple.com/?daddr=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🍎 Apple</a>
-        <a href="https://www.google.com/maps/search/?api=1&query=${gQuery}" target="_blank" rel="noopener">🔎 Search</a>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">🧭 Google</a>
+        <a href="https://maps.apple.com/?daddr=${ll}&q=${gLabel}" target="_blank" rel="noopener">🍎 Apple</a>
+        <button onclick="openLocationEditor('${idea.id}')" title="${escapeHtml(geoSourceLabel(idea))}">📍 Fix location</button>
       </div>
+      <div style="font-size:0.68rem; color:var(--muted); margin-top:6px;">${escapeHtml(geoSourceLabel(idea))}</div>
     </div>`;
   }
 
@@ -2082,16 +2147,21 @@
        .addTo(pinLayer);
     });
 
-    // Report anything the geocoder couldn't place, with a retry affordance.
+    // Report anything the geocoder couldn't place, with per-idea fix buttons.
     const unmapped = filtered.filter(i => !mapped.includes(i));
     const box = document.getElementById("mapUnmapped");
     if (unmapped.length) {
       const failed = unmapped.filter(i => String(i.geocodedFrom || "").indexOf("failed") === 0);
       box.classList.remove("hidden");
-      box.innerHTML = `${unmapped.length} idea${unmapped.length === 1 ? "" : "s"} not on the map` +
+      box.innerHTML = `<div style="margin-bottom:6px;">${unmapped.length} idea${unmapped.length === 1 ? "" : "s"} not on the map` +
         (failed.length ? ` (${failed.length} couldn't be located)` : ` (not resolved yet)`) +
-        `: ${unmapped.slice(0, 6).map(i => escapeHtml(i.name)).join(", ")}${unmapped.length > 6 ? "…" : ""}` +
-        ` <button class="link-btn" onclick="runGeocodePass(true)" style="margin-left:6px">retry</button>`;
+        ` — <button class="link-btn" onclick="runGeocodePass(true)">retry all</button></div>` +
+        `<div style="display:flex; flex-wrap:wrap; gap:6px;">` +
+        unmapped.slice(0, 12).map(i =>
+          `<button class="btn small ghost" style="font-size:0.72rem; padding:3px 8px;" onclick="openLocationEditor('${i.id}')">📍 ${escapeHtml(i.name)}</button>`
+        ).join("") +
+        (unmapped.length > 12 ? `<span style="font-size:0.72rem; align-self:center;">+${unmapped.length - 12} more</span>` : "") +
+        `</div>`;
     } else {
       box.classList.add("hidden");
       box.innerHTML = "";
@@ -2207,6 +2277,109 @@
       btn.textContent = original;
       render();
     }
+  }
+
+  // ---------- Manual location override ----------
+  // Lets anyone correct a mis-placed pin. The heavy lifting (expanding short Maps links,
+  // geocoding an address) happens in the backend's setLocation action, since the browser
+  // can't follow a maps.app.goo.gl redirect due to CORS.
+  let locEditingId = null;
+
+  // How a pin's coordinates were obtained, in human terms.
+  const GEO_SOURCE_LABEL = {
+    "link": "🔗 from a Maps link",
+    "link-name": "🔗 from a Maps link's place name",
+    "link-address": "🔗 link + address in description",
+    "link-fallback-name": "⚠️ link couldn't be read — searched the idea name",
+    "address": "📮 from an address in the description",
+    "name": "🔎 searched the idea's name",
+    "manual": "✋ set manually (coordinates)",
+    "manual-link": "✋ set manually (Maps link)",
+    "manual-link-name": "✋ set manually (link place name)",
+    "manual-address": "✋ set manually (address)"
+  };
+  function geoSourceLabel(idea) {
+    const raw = String(idea.geocodedFrom || "");
+    if (!raw) return "not resolved yet";
+    if (raw.indexOf("failed") === 0) return "⚠️ couldn't be located (" + raw.replace("failed:", "") + ")";
+    return GEO_SOURCE_LABEL[raw] || raw;
+  }
+
+  function openLocationEditor(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea) return;
+    locEditingId = id;
+    document.getElementById("locIdeaName").textContent = idea.name;
+    const hasCoords = typeof idea.lat === "number" && isFinite(idea.lat);
+    document.getElementById("locCurrent").innerHTML = hasCoords
+      ? `Currently at <b>${idea.lat.toFixed(5)}, ${idea.lng.toFixed(5)}</b> — ${escapeHtml(geoSourceLabel(idea))}.`
+      : `No location yet — ${escapeHtml(geoSourceLabel(idea))}.`;
+    const input = document.getElementById("locInput");
+    input.value = "";
+    document.getElementById("locError").classList.add("hidden");
+    document.getElementById("locOverlay").classList.remove("hidden");
+    setTimeout(() => input.focus(), 50);
+  }
+  function closeLocationEditor() {
+    locEditingId = null;
+    document.getElementById("locOverlay").classList.add("hidden");
+  }
+  function showLocError(msg) {
+    const box = document.getElementById("locError");
+    box.textContent = msg;
+    box.classList.remove("hidden");
+  }
+
+  async function postLocation(payload) {
+    if (!useBackend) { showLocError("Setting a location needs the Google Apps Script backend (API_URL is blank)."); return null; }
+    const btn = document.getElementById("locSaveBtn");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "saving…";
+    try {
+      writeSeq++;                    // invalidate any in-flight poll
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(Object.assign({ author: me }, payload))
+      });
+      const json = await res.json();
+      if (json && json.ideas) {
+        if (!json.times) json.times = [];
+        data = json; setSync(true);
+      }
+      return json;
+    } catch (err) {
+      setSync(false);
+      showLocError("Couldn't reach the backend. Check your connection and try again.");
+      return null;
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  }
+
+  async function saveLocationOverride() {
+    const text = document.getElementById("locInput").value.trim();
+    if (!text) { showLocError("Enter an address, a lat/lng pair, or a Maps link."); return; }
+    const id = locEditingId;
+    const json = await postLocation({ action: "setLocation", id, text });
+    if (!json) return;
+    if (!json.located) {
+      showLocError("Couldn't work out a location from that. Try a full street address, a \"lat, lng\" pair, or a different Maps link.");
+      return;
+    }
+    closeLocationEditor();
+    render();
+    renderMap(true);
+    if (activeTab === "map") focusPin(id);
+  }
+
+  async function clearLocationOverride() {
+    const id = locEditingId;
+    const json = await postLocation({ action: "setLocation", id, clear: true });
+    if (!json) return;
+    closeLocationEditor();
+    render();
+    renderMap(true);
   }
 
   // ---------- Live updating ----------
