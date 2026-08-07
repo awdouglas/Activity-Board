@@ -449,6 +449,39 @@
   .map-nearby-row:hover { background: var(--card-hover); border-color: var(--accent); }
   .map-nearby-row .mn-dist { color: var(--time); font-weight: 700; font-size: 0.78rem; flex-shrink: 0; }
   .map-nearby-row .mn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Location candidate picker (inside the Set-location modal) */
+  .cand-list { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; max-height: 44vh; overflow-y: auto; }
+  .cand-row {
+    display: flex; align-items: flex-start; gap: 10px; text-align: left;
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; cursor: pointer; font-family: inherit;
+    font-size: 0.85rem; width: 100%; transition: all 0.15s;
+  }
+  .cand-row:hover { border-color: var(--accent); background: var(--card-hover); }
+  .cand-row.is-current { border-color: var(--up); }
+  .cand-row .cand-num {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 0.68rem; font-weight: 800;
+    display: grid; place-items: center; margin-top: 1px;
+  }
+  .cand-row .cand-body { flex: 1; min-width: 0; }
+  .cand-row .cand-addr { display: block; word-break: break-word; line-height: 1.35; }
+  .cand-row .cand-sub { display: block; color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+  .cand-row .cand-flag { color: var(--time); font-weight: 700; }
+  .cand-hint { font-size: 0.78rem; color: var(--muted); margin: 0 0 10px; }
+  .loc-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .loc-tabs button {
+    flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 7px 10px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .loc-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .cand-confirm-badge {
+    display: inline-flex; align-items: center; gap: 4px; background: rgba(245,158,11,0.14);
+    border: 1px solid rgba(245,158,11,0.45); color: var(--time);
+    padding: 1px 7px; border-radius: 6px; font-size: 0.68rem; font-weight: 700;
+  }
   @media (max-width: 540px) {
     #mapCanvas { height: 54vh; min-height: 320px; }
   }
@@ -602,21 +635,41 @@
       <h2>📍 Set location</h2>
       <p id="locIdeaName" style="color:var(--text); font-weight:600; margin:0 0 4px;"></p>
       <p id="locCurrent" style="font-size:0.78rem;"></p>
-      <label for="locInput">Address, coordinates, or a Google / Apple Maps link</label>
-      <textarea id="locInput" rows="3" placeholder="1432 Rue Mackay, Montreal
+
+      <div class="loc-tabs">
+        <button id="locTabPick" class="active" onclick="setLocMode('pick')">🔎 Choose from matches</button>
+        <button id="locTabManual" onclick="setLocMode('manual')">✎ Enter manually</button>
+      </div>
+
+      <!-- Mode 1: pick from geocoder candidates (handles chains / duplicate names) -->
+      <div id="locPickMode">
+        <p class="cand-hint" id="locCandHint">Looking up possible locations…</p>
+        <div class="cand-list" id="locCandList"></div>
+        <div class="row">
+          <button class="btn ghost" style="flex:1" onclick="closeLocationEditor()">Cancel</button>
+          <button class="btn ghost" style="flex:1" onclick="refreshCandidates()">↻ Search again</button>
+        </div>
+      </div>
+
+      <!-- Mode 2: type an address / coordinates / Maps link -->
+      <div id="locManualMode" class="hidden">
+        <label for="locInput">Address, coordinates, or a Google / Apple Maps link</label>
+        <textarea id="locInput" rows="3" placeholder="1432 Rue Mackay, Montreal
 45.4952, -73.5793
 https://maps.app.goo.gl/…
 https://maps.apple.com/?ll=…"></textarea>
-      <div style="font-size:0.75rem; color:var(--muted); margin:-6px 0 14px;">
-        Any of these work — a street address, a <b>lat, lng</b> pair, or a share link from
-        Google or Apple Maps (short links are expanded automatically).
+        <div style="font-size:0.75rem; color:var(--muted); margin:-6px 0 14px;">
+          Any of these work — a street address, a <b>lat, lng</b> pair, or a share link from
+          Google or Apple Maps (short links are expanded automatically).
+        </div>
+        <div class="row">
+          <button class="btn ghost" style="flex:1" onclick="closeLocationEditor()">Cancel</button>
+          <button class="btn ghost" style="flex:1" onclick="clearLocationOverride()" title="Clear the saved coordinates and let automatic resolution try again">↺ Reset</button>
+          <button class="btn" style="flex:1" id="locSaveBtn" onclick="saveLocationOverride()">Save</button>
+        </div>
       </div>
-      <div id="locError" class="map-warn hidden" style="margin-bottom:12px;"></div>
-      <div class="row">
-        <button class="btn ghost" style="flex:1" onclick="closeLocationEditor()">Cancel</button>
-        <button class="btn ghost" style="flex:1" onclick="clearLocationOverride()" title="Clear the saved coordinates and let automatic resolution try again">↺ Reset</button>
-        <button class="btn" style="flex:1" id="locSaveBtn" onclick="saveLocationOverride()">Save</button>
-      </div>
+
+      <div id="locError" class="map-warn hidden" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -2120,7 +2173,7 @@ https://maps.apple.com/?ll=…"></textarea>
         <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
         <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">🧭 Google</a>
         <a href="https://maps.apple.com/?daddr=${ll}&q=${gLabel}" target="_blank" rel="noopener">🍎 Apple</a>
-        <button onclick="openLocationEditor('${idea.id}')" title="${escapeHtml(geoSourceLabel(idea))}">📍 Fix location</button>
+        <button onclick="openLocationEditor('${idea.id}')" title="${escapeHtml(geoSourceLabel(idea))}">${needsLocationConfirm(idea) ? "⚠️ Confirm location" : "📍 Fix location"}</button>
       </div>
       <div style="font-size:0.68rem; color:var(--muted); margin-top:6px;">${escapeHtml(geoSourceLabel(idea))}</div>
     </div>`;
@@ -2134,7 +2187,8 @@ https://maps.apple.com/?ll=…"></textarea>
     const mapped = ideasWithCoords(filtered);
 
     // Only rebuild pins when something that affects them actually changed.
-    const key = JSON.stringify(mapped.map(i => [i.id, i.lat, i.lng, (i.voters || []).length, ideaHasReservation(i)]));
+    // geocodedFrom is included so confirming a location refreshes the popup text.
+    const key = JSON.stringify(mapped.map(i => [i.id, i.lat, i.lng, (i.voters || []).length, ideaHasReservation(i), i.geocodedFrom || ""]));
     if (!force && key === lastPinKey) { renderNearby(mapped); return; }
     lastPinKey = key;
 
@@ -2167,8 +2221,15 @@ https://maps.apple.com/?ll=…"></textarea>
       box.innerHTML = "";
     }
 
-    document.getElementById("mapStatus").textContent =
-      `${mapped.length} of ${filtered.length} shown` + (anyFilterActive() ? " (filtered)" : "");
+    // Surface pins that were placed from an ambiguous lookup, so nobody has to click
+    // every pin to discover a wrong one. These are the chain-restaurant cases.
+    const unconfirmed = mapped.filter(needsLocationConfirm);
+    const status = document.getElementById("mapStatus");
+    status.innerHTML = `${mapped.length} of ${filtered.length} shown` +
+      (anyFilterActive() ? " (filtered)" : "") +
+      (unconfirmed.length
+        ? ` · <span class="cand-confirm-badge" title="Placed from a search with several possible matches — click a pin to confirm">⚠️ ${unconfirmed.length} unconfirmed</span>`
+        : "");
 
     if (!force && mapped.length) fitMapToPins();
     renderNearby(mapped);
@@ -2285,7 +2346,8 @@ https://maps.apple.com/?ll=…"></textarea>
   // can't follow a maps.app.goo.gl redirect due to CORS.
   let locEditingId = null;
 
-  // How a pin's coordinates were obtained, in human terms.
+  // How a pin's coordinates were obtained, in human terms. A trailing "?" on the stored
+  // value means "resolved, but the geocoder had more than one candidate" — worth confirming.
   const GEO_SOURCE_LABEL = {
     "link": "🔗 from a Maps link",
     "link-name": "🔗 from a Maps link's place name",
@@ -2296,29 +2358,50 @@ https://maps.apple.com/?ll=…"></textarea>
     "manual": "✋ set manually (coordinates)",
     "manual-link": "✋ set manually (Maps link)",
     "manual-link-name": "✋ set manually (link place name)",
-    "manual-address": "✋ set manually (address)"
+    "manual-address": "✋ set manually (address)",
+    "chosen": "✅ chosen from search results"
   };
   function geoSourceLabel(idea) {
-    const raw = String(idea.geocodedFrom || "");
+    let raw = String(idea.geocodedFrom || "");
     if (!raw) return "not resolved yet";
     if (raw.indexOf("failed") === 0) return "⚠️ couldn't be located (" + raw.replace("failed:", "") + ")";
-    return GEO_SOURCE_LABEL[raw] || raw;
+    const ambiguous = raw.slice(-1) === "?";
+    if (ambiguous) raw = raw.slice(0, -1);
+    return (GEO_SOURCE_LABEL[raw] || raw) + (ambiguous ? " — several matches, unconfirmed" : "");
+  }
+  // True when a pin was placed from an ambiguous lookup and nobody has confirmed it.
+  function needsLocationConfirm(idea) {
+    const raw = String(idea.geocodedFrom || "");
+    return raw.slice(-1) === "?";
+  }
+
+  function setLocMode(mode) {
+    const pick = mode !== "manual";
+    document.getElementById("locPickMode").classList.toggle("hidden", !pick);
+    document.getElementById("locManualMode").classList.toggle("hidden", pick);
+    document.getElementById("locTabPick").classList.toggle("active", pick);
+    document.getElementById("locTabManual").classList.toggle("active", !pick);
+    document.getElementById("locError").classList.add("hidden");
+    if (!pick) setTimeout(() => document.getElementById("locInput").focus(), 50);
   }
 
   function openLocationEditor(id) {
     const idea = data.ideas.find(i => i.id === id);
     if (!idea) return;
     locEditingId = id;
+    locCandidates = [];
     document.getElementById("locIdeaName").textContent = idea.name;
     const hasCoords = typeof idea.lat === "number" && isFinite(idea.lat);
     document.getElementById("locCurrent").innerHTML = hasCoords
       ? `Currently at <b>${idea.lat.toFixed(5)}, ${idea.lng.toFixed(5)}</b> — ${escapeHtml(geoSourceLabel(idea))}.`
       : `No location yet — ${escapeHtml(geoSourceLabel(idea))}.`;
-    const input = document.getElementById("locInput");
-    input.value = "";
+    document.getElementById("locInput").value = "";
     document.getElementById("locError").classList.add("hidden");
+    document.getElementById("locCandList").innerHTML = "";
+    document.getElementById("locCandHint").textContent = "Looking up possible locations…";
     document.getElementById("locOverlay").classList.remove("hidden");
-    setTimeout(() => input.focus(), 50);
+    setLocMode("pick");
+    loadCandidates();          // fetch matches straight away
   }
   function closeLocationEditor() {
     locEditingId = null;
@@ -2330,11 +2413,101 @@ https://maps.apple.com/?ll=…"></textarea>
     box.classList.remove("hidden");
   }
 
+  // ---------- Candidate picker ----------
+  // Maps.newGeocoder() is an ADDRESS geocoder, not a place search, so a bare chain name
+  // ("Tim Hortons") yields several approximate hits — sometimes all near one intersection.
+  // Rather than silently trusting the first, we show every candidate and let a human pick.
+  let locCandidates = [];
+
+  async function loadCandidates(extraQuery) {
+    const id = locEditingId;
+    const hint = document.getElementById("locCandHint");
+    const list = document.getElementById("locCandList");
+    if (!useBackend) {
+      hint.textContent = "Choosing from matches needs the Google Apps Script backend (API_URL is blank).";
+      return;
+    }
+    hint.textContent = "Looking up possible locations…";
+    list.innerHTML = "";
+    try {
+      writeSeq++;
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "locationCandidates", id, query: extraQuery || "", author: me })
+      });
+      const json = await res.json();
+      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+      if (locEditingId !== id) return;          // modal was closed/changed meanwhile
+      locCandidates = (json && json.candidates) || [];
+      renderCandidates();
+    } catch (err) {
+      setSync(false);
+      hint.textContent = "Couldn't reach the backend to search for locations.";
+    }
+  }
+
+  function renderCandidates() {
+    const hint = document.getElementById("locCandHint");
+    const list = document.getElementById("locCandList");
+    const idea = data.ideas.find(i => i.id === locEditingId);
+    if (!locCandidates.length) {
+      hint.innerHTML = "No matches found. Try <b>✎ Enter manually</b> with a full street address or a Maps link.";
+      list.innerHTML = "";
+      return;
+    }
+    hint.innerHTML = locCandidates.length === 1
+      ? "One match found — tap it to confirm this is the right spot."
+      : `<b>${locCandidates.length} possible locations</b> — tap the correct one. Addresses are shown so you can tell branches apart.`;
+
+    const cur = idea && typeof idea.lat === "number" ? [idea.lat, idea.lng] : null;
+    list.innerHTML = locCandidates.map((c, i) => {
+      // Flag the candidate that matches the pin's current position.
+      const isCurrent = cur && Math.abs(c.lat - cur[0]) < 1e-4 && Math.abs(c.lng - cur[1]) < 1e-4;
+      const dist = myLatLng ? formatDistance(distanceKm(myLatLng, [c.lat, c.lng])) + " away" : "";
+      const vague = c.partial || c.locationType === "APPROXIMATE";
+      return `<button type="button" class="cand-row ${isCurrent ? "is-current" : ""}" onclick="chooseCandidate(${i})">
+        <span class="cand-num">${i + 1}</span>
+        <span class="cand-body">
+          <span class="cand-addr">${escapeHtml(c.address || (c.lat.toFixed(5) + ", " + c.lng.toFixed(5)))}</span>
+          <span class="cand-sub">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}${dist ? " · " + escapeHtml(dist) : ""}${isCurrent ? " · <b>current pin</b>" : ""}${vague ? ' · <span class="cand-flag">approximate</span>' : ""}</span>
+        </span>
+      </button>`;
+    }).join("");
+  }
+
+  // Re-run the search, optionally narrowed by a hint the user types in.
+  async function refreshCandidates() {
+    const extra = prompt("Add a detail to narrow the search (e.g. a street or neighbourhood).\nLeave blank to just search again:", "");
+    if (extra === null) return;
+    await loadCandidates(extra.trim());
+  }
+
+  async function chooseCandidate(index) {
+    const c = locCandidates[index];
+    if (!c) return;
+    const id = locEditingId;
+    const json = await postLocation({ action: "setLocation", id, lat: c.lat, lng: c.lng, kind: "chosen" });
+    if (!json) return;
+    if (!json.located) { showLocError("Couldn't save that location. Please try again."); return; }
+    closeLocationEditor();
+    render();
+    renderMap(true);
+    if (activeTab === "map") focusPin(id);
+  }
+
   async function postLocation(payload) {
     if (!useBackend) { showLocError("Setting a location needs the Google Apps Script backend (API_URL is blank)."); return null; }
+    // The Save button only exists in manual mode; guard so the candidate picker can
+    // reuse this function without blowing up.
     const btn = document.getElementById("locSaveBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "saving…";
+    const original = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "saving…"; }
+    const hint = document.getElementById("locCandHint");
+    const hintOriginal = hint ? hint.innerHTML : "";
+    if (hint && !document.getElementById("locPickMode").classList.contains("hidden")) {
+      hint.textContent = "Saving…";
+    }
     try {
       writeSeq++;                    // invalidate any in-flight poll
       const res = await fetch(API_URL, {
@@ -2353,7 +2526,8 @@ https://maps.apple.com/?ll=…"></textarea>
       showLocError("Couldn't reach the backend. Check your connection and try again.");
       return null;
     } finally {
-      btn.disabled = false; btn.textContent = original;
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      if (hint && hint.textContent === "Saving…") hint.innerHTML = hintOriginal;
     }
   }
 
