@@ -4,6 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Montreal Idea Board</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
   :root {
     /* Dark mode: original purple gradient background with dark-navy card/border accents */
@@ -395,6 +399,59 @@
     .cal-day-head { font-size: 0.68rem; }
     .cal-event .ce-time { display: none; }
   }
+
+  /* ---------- Map tab ---------- */
+  .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .map-toolbar .grow { flex: 1; }
+  #mapCanvas {
+    height: 62vh; min-height: 380px; width: 100%;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+    z-index: 1;   /* keep Leaflet panes beneath our modals (z-index 50) */
+  }
+  /* Leaflet's own controls/popups need theme-aware surfaces in dark mode. */
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .leaflet-popup-content { margin: 12px 14px; font-family: inherit; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-bar a, .leaflet-bar a:hover { background: var(--card); color: var(--text); border-color: var(--border); }
+  .leaflet-container { background: var(--input-bg); font-family: inherit; }
+  .leaflet-control-attribution { background: rgba(0,0,0,0.55) !important; color: #cbd5e1 !important; font-size: 0.62rem; }
+  .leaflet-control-attribution a { color: #93c5fd !important; }
+  /* Dim the basemap tiles in dark mode so pins stay legible against them. */
+  [data-theme="light"] .map-tiles { filter: none; }
+  .map-tiles { filter: brightness(0.72) contrast(1.05) saturate(0.85) hue-rotate(178deg) invert(0.92); }
+
+  .map-pin {
+    display: grid; place-items: center; border-radius: 50%;
+    width: 26px; height: 26px; font-size: 0.7rem; font-weight: 800;
+    color: #1f2937; border: 2px solid rgba(255,255,255,0.85);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.45);
+  }
+  .map-pin.reserved { color: #fff; }
+  .map-pin.me-pin { background: var(--accent); color: #fff; border-color: #fff; }
+  .map-pop h4 { margin: 0 0 4px; font-size: 0.95rem; color: var(--text); }
+  .map-pop .mp-meta { color: var(--muted); font-size: 0.75rem; margin-bottom: 6px; }
+  .map-pop .mp-desc { color: var(--muted); font-size: 0.8rem; margin: 0 0 8px; max-height: 80px; overflow: auto; white-space: pre-wrap; }
+  .map-pop .mp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .map-pop .mp-actions button, .map-pop .mp-actions a {
+    background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 4px 9px; font-size: 0.75rem; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+  }
+  .map-pop .mp-actions button:hover, .map-pop .mp-actions a:hover { border-color: var(--accent); }
+  .map-note { font-size: 0.75rem; color: var(--muted); margin-top: 8px; }
+  .map-warn { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 8px 12px; border-radius: 8px; font-size: 0.78rem; margin-bottom: 10px; }
+  .map-nearby { margin-top: 14px; }
+  .map-nearby h3 { font-size: 0.95rem; margin: 0 0 8px; }
+  .map-nearby-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 6px; background: var(--card); font-size: 0.85rem; cursor: pointer; }
+  .map-nearby-row:hover { background: var(--card-hover); border-color: var(--accent); }
+  .map-nearby-row .mn-dist { color: var(--time); font-weight: 700; font-size: 0.78rem; flex-shrink: 0; }
+  .map-nearby-row .mn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 540px) {
+    #mapCanvas { height: 54vh; min-height: 320px; }
+  }
 </style>
 </head>
 <body>
@@ -485,6 +542,17 @@
         </div>
 
         <div class="help-section">
+          <h3>📍 The Map tab</h3>
+          <p>Every idea we can place shows up as a pin, following whatever filters the Board currently has applied. Pins use the same color code as the calendar: red for <b>🔒 Reservation Made</b>, otherwise a pale-yellow → orange heat map by vote count (the number on the pin is its vote total).</p>
+          <ul>
+            <li><b>📍 Find my location</b> — with your permission, drops a marker where you are and lists the <b>nearest ideas</b> below the map.</li>
+            <li><b>Click a pin</b> for details, a link back to the Board, and one-tap <b>directions</b> in Google or Apple Maps.</li>
+            <li><b>🔄 Resolve missing pins</b> — looks up any ideas that don't have a location yet. Each idea's spot comes from a Google Maps link in its website/description, else a street address in its description, else a search for its name. Results are saved, so this only needs running when new ideas are added.</li>
+            <li>If an idea can't be placed, it's listed above the map — adding a street address or Maps link to its description usually fixes it.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
           <h3>🔄 Staying in sync</h3>
           <p>The board updates live as others make changes. If something looks out of date, click <b>↻ refresh</b> next to the sync status at the top.</p>
         </div>
@@ -494,6 +562,37 @@
           <p>Use the toggle switch in the header to flip between dark and light themes — your choice is remembered on this device.</p>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="mapsOverlay" onclick="if(event.target===this) closeMapsExport()">
+    <div class="modal wide help-modal">
+      <div class="help-header">
+        <h2>📍 Export to Google Maps</h2>
+        <button class="link-btn" onclick="closeMapsExport()">✕ close</button>
+      </div>
+      <div class="help-body">
+        <p style="margin:0 0 16px;">Exporting <b><span id="mapsCount">0</span></b> idea(s) — whatever the Board is currently filtered to.</p>
+
+        <div class="help-section">
+          <h3>Option 1 — Google My Maps (bulk, recommended)</h3>
+          <p>Download a CSV, then in <b>Google My Maps</b>: <i>Create a new map → Import → upload the CSV</i>. Choose <b>Location</b> as the position column and <b>Name</b> as the title. Every idea gets pinned automatically.</p>
+          <button class="btn small" style="margin-top:10px" onclick="downloadMapsCsv()">⬇ Download CSV</button>
+        </div>
+
+        <div class="help-section">
+          <h3>Option 2 — Save into a Maps List (one at a time)</h3>
+          <p>Google doesn't allow apps to write to your saved Lists, so this step is manual: open each link, then tap <b>Save</b> and pick your list.</p>
+          <div id="mapsLinkList" style="margin-top:12px;"></div>
+          <button class="btn small ghost" style="margin-top:10px" onclick="copyMapsLinks()">📋 Copy all links</button>
+        </div>
+
+        <div class="help-section">
+          <h3>What got matched</h3>
+          <p>Each idea resolves in this order: a <b>Google Maps link</b> in its website/description → a <b>street address</b> found in its description → otherwise a <b>name search</b>.</p>
+          <div id="mapsResolveSummary" style="margin-top:10px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -513,6 +612,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="tabBoard" onclick="switchTab('board')">📋 Board</button>
       <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Calendar</button>
+      <button class="tab-btn" id="tabMap" onclick="switchTab('map')">📍 Map</button>
     </div>
 
     <div class="banner hidden" id="configBanner">
@@ -562,6 +662,7 @@
       <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel()">⚙ Filters</button>
       <button class="btn small ghost" onclick="expandAll(true)">⊕ Expand all</button>
       <button class="btn small ghost" onclick="expandAll(false)">⊖ Collapse all</button>
+      <button class="btn small ghost" id="exportMapsBtn" onclick="openMapsExport()">📍 Export to Maps</button>
       <span class="grow"></span>
       <span id="filterSummary" style="font-size:0.75rem; color:var(--muted);"></span>
     </div>
@@ -582,6 +683,9 @@
       </div>
       <div class="frow">
         <label class="chk"><input type="checkbox" id="filterStarred" onchange="onFilterInput()" /> ⭐ Show only my starred ideas</label>
+      </div>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="filterUpvoted" onchange="onFilterInput()" /> ▲ Show only ideas I've upvoted</label>
       </div>
       <div class="frow">
         <label class="chk"><input type="checkbox" id="filterReserved" onchange="onFilterInput()" /> 🔒 Show only ideas with a Reservation Made</label>
@@ -612,6 +716,28 @@
       </div>
       <div id="calGrid"></div>
     </div>
+
+    <div id="mapView" class="hidden">
+      <div class="map-toolbar">
+        <button class="btn small ghost" id="mapLocateBtn" onclick="locateMe()">📍 Find my location</button>
+        <button class="btn small ghost" id="mapFitBtn" onclick="fitMapToPins()">⤢ Fit all pins</button>
+        <button class="btn small ghost" id="mapGeocodeBtn" onclick="runGeocodePass(false)">🔄 Resolve missing pins</button>
+        <span class="grow"></span>
+        <span id="mapStatus" style="font-size:0.75rem; color:var(--muted);"></span>
+      </div>
+      <div class="map-warn hidden" id="mapUnmapped"></div>
+      <div id="mapCanvas"></div>
+      <div class="cal-legend" style="margin-top:10px;">
+        <span><span class="sw" style="background:linear-gradient(90deg, hsl(35,90%,52%), hsl(48,35%,62%))"></span> Most votes → fewest (heat map)</span>
+        <span><span class="sw" style="background:rgba(239,68,68,0.92)"></span> 🔒 Reservation made</span>
+        <span><span class="sw" style="background:var(--accent)"></span> Your location</span>
+      </div>
+      <div class="map-note">
+        Pins follow the Board's current filters. Locations are resolved from each idea's Maps link,
+        then a street address in its description, then its name — and cached, so this is fast after the first pass.
+      </div>
+      <div class="map-nearby hidden" id="mapNearby"></div>
+    </div>
   </div>
 
 <script>
@@ -619,7 +745,7 @@
      CONFIG — paste your Google Apps Script Web App URL here.
      See setup-instructions.md. Leave "" to run in local mode.
      ============================================================ */
-  const API_URL = "https://script.google.com/macros/s/AKfycbxy3kdTozWmi4Ivfm0CJILT1re8EhtQ3uVEvLx_VfQPsGVUemmmjgDKLpVPlSTAt-mw/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbyXPJYH-VF-YNzD82vvLfDGptwMjv5IvJW8vaf0XMWr8dZkSh8r72Jlm9d1xdlW5Ok4jw/exec";
 
   /* ============================================================
      TRIP DATE RANGE — the only dates users can pick.
@@ -629,6 +755,11 @@
      ============================================================ */
   const TRIP_START = "2026-10-11";   // Sunday, October 11, 2026
   const TRIP_END   = "2026-10-17";   // Saturday, October 17, 2026
+
+  /* City/region appended to Google Maps searches during export, so an address or
+     activity name resolves in the right place (e.g. "Tim Hortons" alone is ambiguous).
+     Set to "" to disable and search the raw name/address only. */
+  const TRIP_CITY = "Montreal, QC";
 
   const POLL_MS = 5000;              // live-update interval
   const STORE_USER = "ideaBoard.initials";
@@ -684,7 +815,7 @@
   // Stars are private to this user: kept only in localStorage, never sent to the server.
   let stars = JSON.parse(localStorage.getItem(STORE_STARS) || "[]");
   // Filter state.
-  let filters = { tags: [], author: "", day: "", starred: false, reserved: false };
+  let filters = { tags: [], author: "", day: "", starred: false, reserved: false, upvoted: false };
   const useBackend = !!API_URL;
 
   function saveStars() { localStorage.setItem(STORE_STARS, JSON.stringify(stars)); }
@@ -744,11 +875,17 @@
     const rid = () => String(Date.now()) + Math.floor(Math.random()*1000);
     if (p.action === "add") {
       data.ideas.push({ id: rid(), name: p.name, desc: p.desc || "", url: p.url || "",
-        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [],
-        tags: (p.tags || "").split(",").map(s => s.trim()).filter(Boolean), endtime: p.endtime || "" });
+        datetime: p.datetime || "", author: p.author, created: Date.now(), voters: [p.author],
+        tags: (p.tags || "").split(",").map(s => s.trim()).filter(Boolean), endtime: p.endtime || "",
+        lat: null, lng: null, geocodedFrom: "" });
     } else if (p.action === "edit") {
       const i = data.ideas.find(x => x.id === p.id);
-      if (i && i.author === p.author) { i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; i.tags = (p.tags || "").split(",").map(s => s.trim()).filter(Boolean); i.endtime = p.endtime || ""; }
+      if (i && i.author === p.author) {
+        // Mirror the backend: changing name/desc/url invalidates cached coordinates.
+        const locationChanged = i.name !== p.name || (i.desc || "") !== (p.desc || "") || (i.url || "") !== (p.url || "");
+        i.name = p.name; i.desc = p.desc || ""; i.url = p.url || ""; i.datetime = p.datetime || ""; i.tags = (p.tags || "").split(",").map(s => s.trim()).filter(Boolean); i.endtime = p.endtime || "";
+        if (locationChanged) { i.lat = null; i.lng = null; i.geocodedFrom = ""; }
+      }
     } else if (p.action === "delete") {
       const i = data.ideas.find(x => x.id === p.id);
       if (i && i.author === p.author) {
@@ -1039,20 +1176,22 @@
     filters.author = document.getElementById("filterAuthor").value.trim().toUpperCase();
     filters.day = document.getElementById("filterDay").value;
     filters.starred = document.getElementById("filterStarred").checked;
+    filters.upvoted = document.getElementById("filterUpvoted").checked;
     filters.reserved = document.getElementById("filterReserved").checked;
     render();
   }
   function clearFilters() {
-    filters = { tags: [], author: "", day: "", starred: false, reserved: false };
+    filters = { tags: [], author: "", day: "", starred: false, reserved: false, upvoted: false };
     document.getElementById("filterAuthor").value = "";
     document.getElementById("filterDay").value = "";
     document.getElementById("filterStarred").checked = false;
+    document.getElementById("filterUpvoted").checked = false;
     document.getElementById("filterReserved").checked = false;
     renderTagPicker("filterTagPicker", filters.tags);
     render();
   }
   function anyFilterActive() {
-    return filters.tags.length || filters.author || filters.day || filters.starred || filters.reserved;
+    return filters.tags.length || filters.author || filters.day || filters.starred || filters.reserved || filters.upvoted;
   }
   // Does an idea have any suggestion marked "Reservation Made"?
   function ideaHasReservation(idea) {
@@ -1063,6 +1202,7 @@
     if (filters.tags.length && !filters.tags.every(t => (idea.tags || []).includes(t))) return false;
     if (filters.author && idea.author.toUpperCase() !== filters.author) return false;
     if (filters.starred && !isStarred(idea.id)) return false;
+    if (filters.upvoted && !(idea.voters || []).includes(me)) return false;
     if (filters.reserved && !ideaHasReservation(idea)) return false;
     if (filters.day) {
       const dayOf = dt => (dt || "").slice(0, 10);   // "YYYY-MM-DD" prefix, "" if time-only
@@ -1276,6 +1416,7 @@
   function render() {
     refreshAddTagPicker();
     if (activeTab === "calendar") renderCalendar();
+    if (activeTab === "map") renderMap(false);
     const container = document.getElementById("ideas");
     const sort = document.getElementById("sort").value;
     let list = data.ideas.filter(ideaMatchesFilters);
@@ -1520,9 +1661,17 @@
     activeTab = tab;
     document.getElementById("boardView").classList.toggle("hidden", tab !== "board");
     document.getElementById("calendarView").classList.toggle("hidden", tab !== "calendar");
+    document.getElementById("mapView").classList.toggle("hidden", tab !== "map");
     document.getElementById("tabBoard").classList.toggle("active", tab === "board");
     document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
+    document.getElementById("tabMap").classList.toggle("active", tab === "map");
     if (tab === "calendar") renderCalendar();
+    if (tab === "map") {
+      renderMap(true);
+      // Leaflet measures its container on creation; if that happened while the tab was
+      // hidden (display:none → 0×0), tiles render blank until we tell it to re-measure.
+      requestAnimationFrame(() => { if (map) map.invalidateSize(); });
+    }
   }
 
   // ---------- Help ----------
@@ -1702,6 +1851,364 @@
     });
   }
 
+  // ---------- Google Maps export ----------
+  // Google exposes no API for writing to a user's saved "Lists", so we resolve each
+  // filtered idea to the best Maps target we can and offer two paths: a My Maps CSV
+  // (bulk import, geocoded automatically) or per-idea links to Save manually.
+
+  // A Google Maps URL anywhere in a string (maps.google.*, google.*/maps, goo.gl/maps, maps.app.goo.gl).
+  const MAPS_URL_RE = /https?:\/\/(?:www\.)?(?:maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z.]+|(?:www\.)?google\.[a-z.]+\/maps)[^\s<]*/i;
+
+  // A street address in either English suffix order ("1234 Sainte-Catherine St") or
+  // French/Spanish prefix order ("158 Rue Saint-Viateur Ouest"). Street-name tokens must
+  // be Capitalized (or an ordinal like "12th", or a French particle like "du"/"de la"),
+  // which is what keeps prose out — "Sit at table 3 Rue side" correctly finds nothing.
+  // Intentionally case-SENSITIVE: capitalization is the main signal here.
+  const ADDR_NAME = "(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’\\-]*|\\d{1,3}(?:st|nd|rd|th)|du|de|des|la|le|les|d'|l')";
+  const ADDR_SUFFIX = "(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Square|Sq|Terrace|Ter|Parkway|Pkwy|Highway|Hwy)";
+  const ADDR_PREFIX = "(?:Rue|Avenue|Av|Boulevard|Boul|Bd|Chemin|Ch|Place|Impasse|Allee|Allée|Quai|Cours|Via|Calle|Plaza)";
+  const ADDR_CITY = "(?:\\s*,\\s*[A-ZÀ-Þ][A-Za-zÀ-ÿ'’.\\- ]{1,39}){0,2}";
+  const ADDRESS_RE = new RegExp(
+    "\\b\\d{1,5}[A-Za-z]?(?:\\s*,)?\\s+(?:" +
+      ADDR_PREFIX + "\\s+" + ADDR_NAME + "(?:\\s+" + ADDR_NAME + "){0,3}" +
+      "|" +
+      "(?:" + ADDR_NAME + "\\s+){1,4}" + ADDR_SUFFIX + "\\b\\.?" +
+    ")" + ADDR_CITY);
+
+  function findMapsUrl(idea) {
+    for (const field of [idea.url, idea.desc]) {
+      const m = String(field || "").match(MAPS_URL_RE);
+      if (m) return m[0];
+    }
+    return null;
+  }
+  function findAddress(idea) {
+    const m = String(idea.desc || "").match(ADDRESS_RE);
+    return m ? m[0].trim().replace(/[.,;:]+$/, "") : null;
+  }
+
+  // Append the trip city for geocoding accuracy, unless the text already names it.
+  function withCity(text) {
+    if (!TRIP_CITY) return text;
+    const firstCityWord = TRIP_CITY.split(",")[0].trim();
+    if (firstCityWord && new RegExp("\\b" + firstCityWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text)) return text;
+    return text + ", " + TRIP_CITY;
+  }
+
+  // Resolve one idea → { idea, kind, query, url }
+  //   kind "link"    — an explicit Google Maps URL was found (used verbatim)
+  //   kind "address" — a street address was parsed out of the description
+  //   kind "name"    — fallback: search the idea's name, Maps picks the first result
+  function resolveMapsTarget(idea) {
+    const link = findMapsUrl(idea);
+    if (link) return { idea, kind: "link", query: link, url: link };
+    const addr = findAddress(idea);
+    if (addr) {
+      const q = withCity(addr);
+      return { idea, kind: "address", query: q, url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) };
+    }
+    const q = withCity(idea.name);
+    return { idea, kind: "name", query: q, url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) };
+  }
+
+  // The currently-filtered ideas, in the Board's current sort order.
+  function currentMapsTargets() {
+    return data.ideas.filter(ideaMatchesFilters).map(resolveMapsTarget);
+  }
+
+  let mapsTargets = [];
+  function openMapsExport() {
+    mapsTargets = currentMapsTargets();
+    document.getElementById("mapsCount").textContent = mapsTargets.length;
+
+    const KIND_LABEL = { link: "🔗 Maps link", address: "📮 address", name: "🔎 name search" };
+    document.getElementById("mapsLinkList").innerHTML = mapsTargets.length
+      ? mapsTargets.map(t => `<div style="margin-bottom:6px; font-size:0.85rem;">
+          <a class="inline-link" href="${escapeHtml(t.url)}" target="_blank" rel="noopener">${escapeHtml(t.idea.name)}</a>
+          <span style="color:var(--muted); font-size:0.75rem; margin-left:6px;">${KIND_LABEL[t.kind]}</span>
+        </div>`).join("")
+      : '<div style="color:var(--muted); font-size:0.85rem;">No ideas match the current filters.</div>';
+
+    const counts = mapsTargets.reduce((a, t) => { a[t.kind] = (a[t.kind] || 0) + 1; return a; }, {});
+    document.getElementById("mapsResolveSummary").innerHTML =
+      `<div style="font-size:0.82rem; color:var(--muted);">
+         🔗 ${counts.link || 0} from a Maps link · 📮 ${counts.address || 0} from an address · 🔎 ${counts.name || 0} by name search
+       </div>`;
+
+    document.getElementById("mapsOverlay").classList.remove("hidden");
+  }
+  function closeMapsExport() { document.getElementById("mapsOverlay").classList.add("hidden"); }
+
+  function csvCell(s) { return `"${String(s == null ? "" : s).replace(/"/g, '""')}"`; }
+  // Collapse newlines/tabs so multi-line descriptions stay on one CSV row — My Maps'
+  // importer is unreliable with embedded line breaks even inside quoted cells.
+  function csvFlatten(s) { return String(s == null ? "" : s).replace(/[\r\n\t]+/g, " ").trim(); }
+
+  function downloadMapsCsv() {
+    if (!mapsTargets.length) return;
+    // The header row must be written RAW — unquoted and with no BOM. Google My Maps
+    // doesn't strip quotes from header cells, so `"Name"` is read as a column literally
+    // named `"Name"`, and it rejects the upload because `"` is an illegal name character
+    // ("Column names must be unique and cannot be longer than 64 characters or include
+    // these characters: " < > { } |"). A BOM would likewise become part of column 1's
+    // name. These names are plain ASCII with no commas/quotes, so raw is safe.
+    const header = ["Name", "Location", "Notes", "Website", "Tags", "Votes"].join(",");
+    const body = mapsTargets.map(t => [
+      csvFlatten(t.idea.name), csvFlatten(t.query), csvFlatten(t.idea.desc),
+      csvFlatten(t.idea.url), (t.idea.tags || []).join(" / "), (t.idea.voters || []).length
+    ].map(csvCell).join(","));
+    const csv = [header].concat(body).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "idea-board-maps.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function copyMapsLinks() {
+    if (!mapsTargets.length) return;
+    const text = mapsTargets.map(t => `${t.idea.name} — ${t.url}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Copied " + mapsTargets.length + " link(s) to your clipboard.");
+    } catch (e) {
+      // Clipboard API needs a secure context / permission — fall back to a prompt.
+      prompt("Copy these links:", text);
+    }
+  }
+
+  // ---------- Map tab (Leaflet + OpenStreetMap) ----------
+  // Coordinates are geocoded ONCE by the backend and cached in the Sheet (lat/lng
+  // columns), so opening this tab never triggers geocoding on its own. No API key
+  // and no billing account is involved — OSM tiles + Apps Script's Maps.newGeocoder().
+
+  const MAP_DEFAULT_CENTER = [45.5019, -73.5674];   // Montreal; only used before pins load
+  const MAP_DEFAULT_ZOOM = 13;
+
+  let map = null;                 // the Leaflet map instance (created lazily)
+  let pinLayer = null;            // LayerGroup holding idea pins
+  let mePin = null;               // marker for the user's own location
+  let myLatLng = null;            // [lat, lng] once geolocation succeeds
+  let geocodeBusy = false;
+  let lastPinKey = "";            // skip re-pinning when nothing relevant changed
+
+  function ideasWithCoords(list) {
+    return list.filter(i => typeof i.lat === "number" && isFinite(i.lat) &&
+                            typeof i.lng === "number" && isFinite(i.lng));
+  }
+
+  // Great-circle distance in km (haversine).
+  function distanceKm(a, b) {
+    const R = 6371, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b[0] - a[0]), dLng = toRad(b[1] - a[1]);
+    const s = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+  function formatDistance(km) {
+    if (km < 1) return Math.round(km * 1000) + " m";
+    return (km < 10 ? km.toFixed(1) : Math.round(km)) + " km";
+  }
+
+  function ensureMap() {
+    if (map) return map;
+    map = L.map("mapCanvas", { zoomControl: true, scrollWheelZoom: true })
+           .setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      className: "map-tiles",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    pinLayer = L.layerGroup().addTo(map);
+    return map;
+  }
+
+  // Build one pin. Reuses the calendar's heat-map palette so colors mean the same
+  // thing in both views: red = reservation, yellow→orange = fewest→most votes.
+  function makePinIcon(idea, maxVotes, reserved) {
+    const votes = (idea.voters || []).length;
+    const bg = reserved ? "rgba(239,68,68,0.95)" : heatColor(votes, maxVotes);
+    return L.divIcon({
+      className: "",
+      html: `<div class="map-pin ${reserved ? "reserved" : ""}" style="background:${bg}">${reserved ? "🔒" : votes}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      popupAnchor: [0, -14]
+    });
+  }
+
+  function popupHtml(idea) {
+    const votes = (idea.voters || []).length;
+    const sched = resolveIdeaSchedule(idea);
+    const when = sched ? formatDateTime(sched.date + "T" + minutesToTimeStr(sched.startMin)) : "";
+    const gQuery = encodeURIComponent(withCity(idea.name));
+    const tags = (idea.tags || []).length
+      ? `<div class="idea-tags" style="margin:4px 0 6px;">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>` : "";
+    return `<div class="map-pop">
+      <h4>${escapeHtml(idea.name)}</h4>
+      <div class="mp-meta">▲ ${votes} vote${votes === 1 ? "" : "s"} · by ${escapeHtml(idea.author)}${when ? " · " + escapeHtml(when) : ""}${ideaHasReservation(idea) ? " · 🔒 reserved" : ""}</div>
+      ${tags}
+      ${idea.desc ? `<div class="mp-desc">${escapeHtml(idea.desc)}</div>` : ""}
+      <div class="mp-actions">
+        <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🧭 Google</a>
+        <a href="https://maps.apple.com/?daddr=${idea.lat},${idea.lng}" target="_blank" rel="noopener">🍎 Apple</a>
+        <a href="https://www.google.com/maps/search/?api=1&query=${gQuery}" target="_blank" rel="noopener">🔎 Search</a>
+      </div>
+    </div>`;
+  }
+
+  function renderMap(force) {
+    if (activeTab !== "map") return;
+    ensureMap();
+
+    const filtered = data.ideas.filter(ideaMatchesFilters);
+    const mapped = ideasWithCoords(filtered);
+
+    // Only rebuild pins when something that affects them actually changed.
+    const key = JSON.stringify(mapped.map(i => [i.id, i.lat, i.lng, (i.voters || []).length, ideaHasReservation(i)]));
+    if (!force && key === lastPinKey) { renderNearby(mapped); return; }
+    lastPinKey = key;
+
+    pinLayer.clearLayers();
+    const maxVotes = mapped.reduce((m, i) => Math.max(m, (i.voters || []).length), 0);
+    mapped.forEach(idea => {
+      const reserved = ideaHasReservation(idea);
+      L.marker([idea.lat, idea.lng], { icon: makePinIcon(idea, maxVotes, reserved), title: idea.name })
+       .bindPopup(popupHtml(idea), { maxWidth: 280 })
+       .addTo(pinLayer);
+    });
+
+    // Report anything the geocoder couldn't place, with a retry affordance.
+    const unmapped = filtered.filter(i => !mapped.includes(i));
+    const box = document.getElementById("mapUnmapped");
+    if (unmapped.length) {
+      const failed = unmapped.filter(i => String(i.geocodedFrom || "").indexOf("failed") === 0);
+      box.classList.remove("hidden");
+      box.innerHTML = `${unmapped.length} idea${unmapped.length === 1 ? "" : "s"} not on the map` +
+        (failed.length ? ` (${failed.length} couldn't be located)` : ` (not resolved yet)`) +
+        `: ${unmapped.slice(0, 6).map(i => escapeHtml(i.name)).join(", ")}${unmapped.length > 6 ? "…" : ""}` +
+        ` <button class="link-btn" onclick="runGeocodePass(true)" style="margin-left:6px">retry</button>`;
+    } else {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    }
+
+    document.getElementById("mapStatus").textContent =
+      `${mapped.length} of ${filtered.length} shown` + (anyFilterActive() ? " (filtered)" : "");
+
+    if (!force && mapped.length) fitMapToPins();
+    renderNearby(mapped);
+  }
+
+  function fitMapToPins() {
+    if (!map) return;
+    const pts = ideasWithCoords(data.ideas.filter(ideaMatchesFilters)).map(i => [i.lat, i.lng]);
+    if (myLatLng) pts.push(myLatLng);
+    if (!pts.length) return;
+    if (pts.length === 1) { map.setView(pts[0], 15); return; }
+    map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 16 });
+  }
+
+  // Ask for the user's location. Requires HTTPS — fine on GitHub Pages.
+  function locateMe() {
+    const btn = document.getElementById("mapLocateBtn");
+    if (!navigator.geolocation) { alert("This browser doesn't support location sharing."); return; }
+    const original = btn.textContent;
+    btn.textContent = "locating…"; btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        myLatLng = [pos.coords.latitude, pos.coords.longitude];
+        ensureMap();
+        if (mePin) map.removeLayer(mePin);
+        mePin = L.marker(myLatLng, {
+          icon: L.divIcon({ className: "", html: '<div class="map-pin me-pin">●</div>', iconSize: [26, 26], iconAnchor: [13, 13] }),
+          title: "You are here", zIndexOffset: 1000
+        }).bindPopup("<b>You are here</b>").addTo(map);
+        btn.textContent = original; btn.disabled = false;
+        fitMapToPins();
+        renderNearby(ideasWithCoords(data.ideas.filter(ideaMatchesFilters)));
+      },
+      err => {
+        btn.textContent = original; btn.disabled = false;
+        const msg = err.code === 1
+          ? "Location permission was denied. You can enable it in your browser's site settings."
+          : "Couldn't get your location (" + err.message + ").";
+        alert(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  // "Nearest ideas" list — only meaningful once we know where the user is.
+  function renderNearby(mapped) {
+    const box = document.getElementById("mapNearby");
+    if (!myLatLng || !mapped.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const rows = mapped
+      .map(i => ({ idea: i, km: distanceKm(myLatLng, [i.lat, i.lng]) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 8)
+      .map(({ idea, km }) => `<div class="map-nearby-row" onclick="focusPin('${idea.id}')">
+          <span class="mn-dist">${formatDistance(km)}</span>
+          <span class="mn-name">${escapeHtml(idea.name)}</span>
+          <span style="color:var(--muted); font-size:0.75rem;">▲ ${(idea.voters || []).length}</span>
+        </div>`).join("");
+    box.classList.remove("hidden");
+    box.innerHTML = `<h3>Nearest to you</h3>${rows}`;
+  }
+
+  // Center the map on one idea and open its popup.
+  function focusPin(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea || !map) return;
+    map.setView([idea.lat, idea.lng], 16);
+    pinLayer.eachLayer(l => {
+      const ll = l.getLatLng();
+      if (Math.abs(ll.lat - idea.lat) < 1e-9 && Math.abs(ll.lng - idea.lng) < 1e-9) l.openPopup();
+    });
+  }
+
+  // Ask the backend to geocode any ideas missing coordinates. Batched server-side,
+  // so this loops until nothing remains (or a batch makes no progress).
+  async function runGeocodePass(force) {
+    if (!useBackend) { alert("Geocoding needs the Google Apps Script backend (API_URL is blank)."); return; }
+    if (geocodeBusy) return;
+    geocodeBusy = true;
+    const btn = document.getElementById("mapGeocodeBtn");
+    const original = btn.textContent;
+    btn.disabled = true;
+    try {
+      let guard = 0;
+      while (guard++ < 10) {
+        btn.textContent = "resolving…";
+        writeSeq++;              // invalidate any poll fetch already in flight
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: force && guard === 1 ? "regeocode" : "geocodeMissing", author: me })
+        });
+        const json = await res.json();
+        if (!json || !json.ideas) break;
+        if (!json.times) json.times = [];
+        data = json; setSync(true);
+        renderMap(true);
+        const info = json.geocode || {};
+        if (!info.remaining || !info.geocoded) break;   // done, or making no progress
+      }
+    } catch (err) {
+      setSync(false);
+      alert("Couldn't reach the backend to resolve locations. Check your connection and try again.");
+    } finally {
+      geocodeBusy = false;
+      btn.disabled = false;
+      btn.textContent = original;
+      render();
+    }
+  }
+
   // ---------- Live updating ----------
   // Thanks to commitHTML() preserving focus, caret and drafts, we can now pull
   // live updates even while the user is typing a comment or new idea.
@@ -1713,7 +2220,7 @@
   }
 
   async function poll() {
-    if (busy || editingId || editingComment || editingTimeId || datePickerFocused()) return;
+    if (busy || geocodeBusy || editingId || editingComment || editingTimeId || datePickerFocused()) return;
     await fetchData();
     render();
   }
