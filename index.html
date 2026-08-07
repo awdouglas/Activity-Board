@@ -641,13 +641,19 @@
         <button id="locTabManual" onclick="setLocMode('manual')">✎ Enter manually</button>
       </div>
 
-      <!-- Mode 1: pick from geocoder candidates (handles chains / duplicate names) -->
+      <!-- Mode 1: pick from place-search candidates (handles chains / duplicate names) -->
       <div id="locPickMode">
-        <p class="cand-hint" id="locCandHint">Looking up possible locations…</p>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+          <input type="text" id="locSearchInput" placeholder="Search places — e.g. Myriade, Tim Hortons"
+                 oninput="onLocSearchInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();runLocSearch();}"
+                 style="flex:1; margin:0;" />
+          <button class="btn small ghost" style="flex-shrink:0;" onclick="runLocSearch()">🔎 Search</button>
+        </div>
+        <p class="cand-hint" id="locCandHint">Searching…</p>
         <div class="cand-list" id="locCandList"></div>
         <div class="row">
           <button class="btn ghost" style="flex:1" onclick="closeLocationEditor()">Cancel</button>
-          <button class="btn ghost" style="flex:1" onclick="refreshCandidates()">↻ Search again</button>
+          <button class="btn ghost" style="flex:1" onclick="clearLocationOverride()" title="Clear the saved coordinates and let automatic resolution try again">↺ Reset</button>
         </div>
       </div>
 
@@ -2406,7 +2412,11 @@ https://maps.apple.com/?ll=…"></textarea>
     document.getElementById("locInput").value = "";
     document.getElementById("locError").classList.add("hidden");
     document.getElementById("locCandList").innerHTML = "";
-    document.getElementById("locCandHint").textContent = "Looking up possible locations…";
+    document.getElementById("locCandHint").textContent = "Searching…";
+    // Seed the search box with the idea's name so it's obvious what was searched and
+    // easy to edit (e.g. drop a "- Shaughnessy Village" qualifier that OSM won't match).
+    const searchBox = document.getElementById("locSearchInput");
+    if (searchBox) searchBox.value = idea.name || "";
     document.getElementById("locOverlay").classList.remove("hidden");
     setLocMode("pick");
     loadCandidates();          // fetch matches straight away
@@ -2422,51 +2432,178 @@ https://maps.apple.com/?ll=…"></textarea>
   }
 
   // ---------- Candidate picker ----------
-  // Maps.newGeocoder() is an ADDRESS geocoder, not a place search, so a bare chain name
-  // ("Tim Hortons") yields several approximate hits — sometimes all near one intersection.
-  // Rather than silently trusting the first, we show every candidate and let a human pick.
+  // Place search runs CLIENT-SIDE against Photon (photon.komoot.io), an OpenStreetMap
+  // place index that does fuzzy/partial name matching and returns one hit per branch.
+  //
+  // Why client-side: Photon sends "Access-Control-Allow-Origin: *", so the browser can
+  // call it directly. Going through Apps Script was actively harmful — UrlFetchApp needs
+  // an extra authorization scope, and when that isn't granted the call throws, gets
+  // swallowed, and the picker shows "No matches found" while looking like the search
+  // simply found nothing. Direct calls remove that whole failure mode and are faster.
+  //
+  // The backend's locationCandidates action is kept as a fallback for when Photon is
+  // unreachable (it can still offer address-geocoder results).
   let locCandidates = [];
+  let locSearchSeq = 0;          // guards against out-of-order async responses
 
-  async function loadCandidates(extraQuery) {
-    const id = locEditingId;
-    const hint = document.getElementById("locCandHint");
-    const list = document.getElementById("locCandList");
-    if (!useBackend) {
-      hint.textContent = "Choosing from matches needs the Google Apps Script backend (API_URL is blank).";
-      return;
-    }
-    hint.textContent = "Looking up possible locations…";
-    list.innerHTML = "";
-    try {
-      writeSeq++;
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "locationCandidates", id, query: extraQuery || "", author: me })
-      });
-      const json = await res.json();
-      if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
-      if (locEditingId !== id) return;          // modal was closed/changed meanwhile
-      locCandidates = (json && json.candidates) || [];
-      renderCandidates();
-    } catch (err) {
-      setSync(false);
-      hint.textContent = "Couldn't reach the backend to search for locations.";
-    }
+  // Bounding box around the trip city: "minLon,minLat,maxLon,maxLat".
+  function tripBbox(pad) {
+    const p = pad || 0.35;
+    const [lat, lng] = MAP_DEFAULT_CENTER;
+    return [(lng - p).toFixed(4), (lat - p).toFixed(4), (lng + p).toFixed(4), (lat + p).toFixed(4)].join(",");
   }
 
-  function renderCandidates() {
+  // One Photon request → normalised candidate objects.
+  async function photonSearch(query, opts) {
+    const o = opts || {};
+    if (!query || !query.trim()) return [];
+    const params = new URLSearchParams({ q: query.trim(), limit: String(o.limit || 12) });
+    params.set("bbox", tripBbox(o.pad));
+    // Bias ranking toward the city centre as well as constraining by bbox.
+    params.set("lat", String(MAP_DEFAULT_CENTER[0]));
+    params.set("lon", String(MAP_DEFAULT_CENTER[1]));
+    if (o.osmTag) params.set("osm_tag", o.osmTag);
+    let json;
+    try {
+      const res = await fetch("https://photon.komoot.io/api/?" + params.toString(), { mode: "cors" });
+      if (!res.ok) return [];
+      json = await res.json();
+    } catch (err) {
+      return [];        // offline / blocked / service down → caller falls back
+    }
+    return ((json && json.features) || []).map(f => {
+      const c = (f.geometry && f.geometry.coordinates) || [];
+      const p = f.properties || {};
+      const lng = Number(c[0]), lat = Number(c[1]);
+      if (!isFinite(lat) || !isFinite(lng)) return null;
+      const street = [p.housenumber, p.street].filter(Boolean).join(" ");
+      const address = [street, p.district, p.city || p.town || p.village, p.state]
+                      .filter(Boolean).join(", ");
+      return {
+        lat, lng,
+        name: String(p.name || ""),
+        address: address || String(p.name || ""),
+        category: String(p.osm_value || p.osm_key || ""),
+        source: "poi", partial: false, locationType: ""
+      };
+    }).filter(Boolean);
+  }
+
+  // Is this coordinate basically the city centroid? That's what an address geocoder
+  // returns when it can't find a place — a confident-looking wrong answer.
+  function isCityCentroidClient(lat, lng) {
+    return Math.abs(lat - MAP_DEFAULT_CENTER[0]) < 0.0055 &&
+           Math.abs(lng - MAP_DEFAULT_CENTER[1]) < 0.0075;
+  }
+
+  /**
+   * Gather candidates for the idea currently being edited.
+   *
+   * Runs several Photon queries in parallel and merges them, which is what produces the
+   * "wildcard" behaviour: a bare name like "Myriade" matches every place whose name
+   * contains it, and an amenity-filtered pass surfaces venues the plain search ranks
+   * below unrelated businesses. Photon already does fuzzy matching, so partial and
+   * misspelled names work ("Myria" → Myriade, "tim horton" → Tim Hortons).
+   */
+  async function loadCandidates(searchText) {
+    const id = locEditingId;
+    const seq = ++locSearchSeq;
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea) return;
+    const hint = document.getElementById("locCandHint");
+    const list = document.getElementById("locCandList");
+    hint.textContent = "Searching…";
+    list.innerHTML = "";
+
+    // Query variants, most specific first. A typed search replaces the idea's name.
+    const typed = (searchText || "").trim();
+    const base = typed || idea.name;
+    const variants = [];
+    const pushVariant = (q, opts) => {
+      if (!q || !q.trim()) return;
+      const key = q.trim().toLowerCase() + "|" + (opts && opts.osmTag ? opts.osmTag : "");
+      if (variants.some(v => v.key === key)) return;
+      variants.push({ key, q: q.trim(), opts: opts || {} });
+    };
+
+    pushVariant(base);
+    // Amenity-only pass: finds cafes/restaurants/bars that a plain search buries.
+    pushVariant(base, { osmTag: "amenity" });
+    // Tourism/leisure pass for attractions, viewpoints, parks.
+    pushVariant(base, { osmTag: "tourism" });
+    if (!typed) {
+      // Strip a trailing qualifier ("Café Myriade - Shaughnessy Village" → "Café Myriade")
+      // and any bracketed aside, so the core name still matches.
+      const trimmed = idea.name.replace(/\s*[-–—(|/].*$/, "").trim();
+      if (trimmed && trimmed.toLowerCase() !== idea.name.trim().toLowerCase()) {
+        pushVariant(trimmed);
+        pushVariant(trimmed, { osmTag: "amenity" });
+      }
+      // Any address in the description is a strong signal.
+      const addrMatch = String(idea.desc || "").match(ADDRESS_RE);
+      if (addrMatch) pushVariant(addrMatch[0]);
+    }
+
+    const results = await Promise.all(variants.map(v => photonSearch(v.q, v.opts)));
+    if (seq !== locSearchSeq || locEditingId !== id) return;   // superseded
+
+    // Merge, dropping city-centroid noise and near-duplicates (~11m grid).
+    const seen = Object.create(null);
+    const merged = [];
+    results.forEach(batch => batch.forEach(c => {
+      if (merged.length >= 15) return;
+      if (isCityCentroidClient(c.lat, c.lng)) return;
+      const key = c.lat.toFixed(4) + "," + c.lng.toFixed(4);
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(c);
+    }));
+
+    // Nothing from Photon → ask the backend, which can still try the address geocoder.
+    if (!merged.length && useBackend) {
+      hint.textContent = "No places matched — checking addresses…";
+      try {
+        writeSeq++;
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "locationCandidates", id, query: typed, author: me })
+        });
+        const json = await res.json();
+        if (json && json.ideas) { if (!json.times) json.times = []; data = json; setSync(true); }
+        if (seq !== locSearchSeq || locEditingId !== id) return;
+        (json && json.candidates || []).forEach(c => {
+          if (isCityCentroidClient(c.lat, c.lng)) return;
+          const key = c.lat.toFixed(4) + "," + c.lng.toFixed(4);
+          if (seen[key]) return;
+          seen[key] = true;
+          merged.push(c);
+        });
+      } catch (err) { /* leave merged empty; renderCandidates explains */ }
+    }
+
+    // Sort by distance from the city centre so the most plausible options come first.
+    merged.sort((a, b) =>
+      distanceKm(MAP_DEFAULT_CENTER, [a.lat, a.lng]) - distanceKm(MAP_DEFAULT_CENTER, [b.lat, b.lng]));
+
+    locCandidates = merged;
+    renderCandidates(typed);
+  }
+
+  function renderCandidates(typed) {
     const hint = document.getElementById("locCandHint");
     const list = document.getElementById("locCandList");
     const idea = data.ideas.find(i => i.id === locEditingId);
     if (!locCandidates.length) {
-      hint.innerHTML = "No matches found. Try <b>✎ Enter manually</b> with a full street address or a Maps link.";
+      hint.innerHTML = typed
+        ? `Nothing matched “${escapeHtml(typed)}”. Try fewer words (just the place name), or use <b>✎ Enter manually</b>.`
+        : "No matches found. Try searching above with fewer words, or use <b>✎ Enter manually</b> with a full street address or a Maps link.";
       list.innerHTML = "";
       return;
     }
     hint.innerHTML = locCandidates.length === 1
       ? "One match found — tap it to confirm this is the right spot."
-      : `<b>${locCandidates.length} possible locations</b> — tap the correct one. Each shows its street address so you can tell branches apart.`;
+      : `<b>${locCandidates.length} places found</b> — tap the correct one. Each shows its street address so you can tell branches apart.`;
 
     const cur = idea && typeof idea.lat === "number" ? [idea.lat, idea.lng] : null;
     list.innerHTML = locCandidates.map((c, i) => {
@@ -2489,11 +2626,16 @@ https://maps.apple.com/?ll=…"></textarea>
     }).join("");
   }
 
-  // Re-run the search, optionally narrowed by a hint the user types in.
-  async function refreshCandidates() {
-    const extra = prompt("Add a detail to narrow the search (e.g. a street or neighbourhood).\nLeave blank to just search again:", "");
-    if (extra === null) return;
-    await loadCandidates(extra.trim());
+  // Live search box. Debounced so typing doesn't hammer Photon; Enter searches at once.
+  let locSearchTimer = null;
+  function onLocSearchInput() {
+    clearTimeout(locSearchTimer);
+    locSearchTimer = setTimeout(runLocSearch, 400);
+  }
+  function runLocSearch() {
+    clearTimeout(locSearchTimer);
+    const el = document.getElementById("locSearchInput");
+    loadCandidates(el ? el.value : "");
   }
 
   async function chooseCandidate(index) {
