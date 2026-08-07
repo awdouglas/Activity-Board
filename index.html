@@ -420,6 +420,20 @@
   .cal-event .ce-name { font-weight: 700; display: block; white-space: normal; word-break: break-word; overflow: hidden; line-height: 1.2; }
   .cal-event .ce-time { display: block; opacity: 0.85; white-space: normal; overflow: hidden; line-height: 1.15; }
   .cal-event .ce-lock { margin-right: 2px; }
+  /* Small "open on the board" affordance inside a calendar event. The event body itself
+     goes to the map, so both destinations stay reachable from one block. */
+  .cal-event .ce-board {
+    position: absolute; top: 1px; right: 1px;
+    background: rgba(0,0,0,0.28); border: none; border-radius: 5px;
+    color: #fff; font-size: 0.62rem; line-height: 1; padding: 2px 3px;
+    cursor: pointer; opacity: 0; transition: opacity 0.15s; font-family: inherit;
+  }
+  .cal-event:hover .ce-board, .cal-event:focus-within .ce-board { opacity: 1; }
+  .cal-event .ce-board:hover { background: rgba(0,0,0,0.5); }
+  /* Touch devices have no hover, so always show it there. */
+  @media (hover: none) {
+    .cal-event .ce-board { opacity: 0.75; }
+  }
   .cal-empty-note { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 30px 10px; }
   .cal-warn { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 8px 12px; border-radius: 8px; font-size: 0.78rem; margin-top: 6px; }
   .reservation-chk { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 0.82rem; color: var(--time); }
@@ -600,7 +614,7 @@
             <li>Events are <b>color-coded by vote count</b> — a heat map from pale yellow (fewest votes) to saturated orange (most votes), ordered left-to-right.</li>
             <li><b>🔒 Reservation Made</b> events are always shown in red and always placed first — they can't be out-voted.</li>
             <li>A <b>diagonal stripe</b> means the end time wasn't specified and was defaulted to 1 hour — treat it as unverified.</li>
-            <li>Click any event to jump back to the Board and highlight that idea.</li>
+            <li>Click any event to <b>show it on the Map</b>. To open it on the Board instead, use the small <b>📋</b> button in the event's corner.</li>
           </ul>
         </div>
 
@@ -610,6 +624,7 @@
           <ul>
             <li><b>📍 Find my location</b> — with your permission, drops a marker where you are and lists the <b>nearest ideas</b> below the map.</li>
             <li><b>Click a pin</b> for details, a link back to the Board, and one-tap <b>directions</b> in Google or Apple Maps.</li>
+            <li>On the Board, each idea has a <b>📍 Map</b> button that jumps straight to its pin. If it doesn't have a location yet, that button reads <b>📍 Set location</b> and opens the search instead.</li>
             <li><b>🔄 Resolve missing pins</b> — looks up any ideas that don't have a location yet. Each idea's spot comes from a Google Maps link in its website/description, else a street address in its description, else a search for its name. Results are saved, so this only needs running when new ideas are added.</li>
             <li>If an idea can't be placed, it's listed above the map — adding a street address or Maps link to its description usually fixes it.</li>
           </ul>
@@ -774,7 +789,6 @@ https://maps.apple.com/?ll=…"></textarea>
       <button class="btn small ghost" id="filterToggle" onclick="toggleFilterPanel('board')">⚙ Filters</button>
       <button class="btn small ghost" onclick="expandAll(true)">⊕ Expand all</button>
       <button class="btn small ghost" onclick="expandAll(false)">⊖ Collapse all</button>
-      <button class="btn small ghost" id="exportMapsBtn" onclick="openMapsExport()">📍 Export to Maps</button>
       <span class="grow"></span>
       <span id="filterSummary" style="font-size:0.75rem; color:var(--muted);"></span>
     </div>
@@ -1593,6 +1607,9 @@ https://maps.apple.com/?ll=…"></textarea>
       const mine = idea.author === me;
       const starred = isStarred(idea.id);
       const hasReservation = ideaHasReservation(idea);
+      // Does this idea have a resolved map location? Drives the 📍 button's label.
+      const hasCoords = typeof idea.lat === "number" && isFinite(idea.lat) &&
+                        typeof idea.lng === "number" && isFinite(idea.lng);
       const voterChips = idea.voters.map(v => `<span class="voter">${escapeHtml(v)}</span>`).join("");
 
       // Comments, sorted per this idea's chosen comment sort ("old" default | "new" | "votes").
@@ -1713,6 +1730,9 @@ https://maps.apple.com/?ll=…"></textarea>
               </button>
               <button class="toggle" onclick="toggleCommentSection('${idea.id}')">
                 💬 ${ideaComments.length} comment${ideaComments.length === 1 ? "" : "s"} ${isCOpen ? "▲" : "▼"}
+              </button>
+              <button class="toggle" onclick="showOnMap('${idea.id}')" title="${hasCoords ? 'Show this on the Map tab' : 'Set this idea\u2019s location'}">
+                📍 ${hasCoords ? 'Map' : 'Set location'}
               </button>
             </div>
             ${isTOpen ? `<div class="times">
@@ -1939,9 +1959,10 @@ https://maps.apple.com/?ll=…"></textarea>
         if (sched.unverifiedEnd) cls.push("unverified");
         const bg = eventBackground(sched, globalMaxVotes);
         const timeLabel = `${formatTimeOnly(minutesToTimeStr(sched.startMin))}–${formatTimeOnly(minutesToTimeStr(sched.endMin))}`;
-        return `<div class="${cls.join(' ')}" style="top:${top}px; height:${height}px; left:calc(${leftPct}% + 2px); width:calc(${widthPct}% - 4px); background:${bg};" onclick="jumpToIdea('${idea.id}')" title="${escapeHtml(idea.name)} — ${escapeHtml(timeLabel)} · ${sched.votes} vote${sched.votes===1?'':'s'}${sched.reserved ? ' (Reservation Made)' : ''}${sched.unverifiedEnd ? ' — end time not verified, defaulted to 1hr' : ''}">
+        return `<div class="${cls.join(' ')}" style="top:${top}px; height:${height}px; left:calc(${leftPct}% + 2px); width:calc(${widthPct}% - 4px); background:${bg};" onclick="showOnMap('${idea.id}')" title="${escapeHtml(idea.name)} — ${escapeHtml(timeLabel)} · ${sched.votes} vote${sched.votes===1?'':'s'}${sched.reserved ? ' (Reservation Made)' : ''}${sched.unverifiedEnd ? ' — end time not verified, defaulted to 1hr' : ''}&#10;Click to show on the map · use 📋 for the board">
           <span class="ce-name">${sched.reserved ? '<span class="ce-lock">🔒</span>' : ''}${escapeHtml(idea.name)}</span>
           <span class="ce-time">${escapeHtml(timeLabel)}</span>
+          <button class="ce-board" onclick="event.stopPropagation(); jumpToIdea('${idea.id}')" title="Open on the Board instead">📋</button>
         </div>`;
       }).join("");
 
@@ -1986,7 +2007,8 @@ https://maps.apple.com/?ll=…"></textarea>
   // Clicking a calendar event switches to the Board tab and opens that idea's time section.
   function jumpToIdea(id) {
     switchTab("board");
-    openTimes[id] = true;
+    // Deliberately does NOT touch openTimes/openComments — arriving from the Map or
+    // Calendar should leave each idea's sections exactly as the user left them.
     render();
     requestAnimationFrame(() => {
       const row = document.querySelector(`.idea[data-idea-id="${id}"]`);
@@ -1998,6 +2020,41 @@ https://maps.apple.com/?ll=…"></textarea>
         setTimeout(() => row.classList.remove("jump-highlight"), 2300);
       }
     });
+  }
+
+  /**
+   * Jump to the Map tab and open one idea's pin. Used by the Board's 🗺 Map button and
+   * by clicking a calendar event.
+   *
+   * Three cases have to be handled or the user just lands on a map with no obvious pin:
+   *   1. The idea has no coordinates yet → offer to set the location instead.
+   *   2. The current filters exclude it → its pin isn't rendered at all, so offer to
+   *      clear the filters rather than silently showing nothing.
+   *   3. All good → switch tabs, then focus the pin AFTER Leaflet has re-measured
+   *      (switchTab calls invalidateSize on the next frame; setView before that can
+   *      centre on a stale 0×0 container).
+   */
+  function showOnMap(id) {
+    const idea = data.ideas.find(i => i.id === id);
+    if (!idea) return;
+
+    const hasCoords = typeof idea.lat === "number" && isFinite(idea.lat) &&
+                      typeof idea.lng === "number" && isFinite(idea.lng);
+    if (!hasCoords) {
+      switchTab("map");
+      requestAnimationFrame(() => openLocationEditor(id));
+      return;
+    }
+
+    if (!ideaMatchesFilters(idea)) {
+      const proceed = confirm(`“${idea.name}” is hidden by the current filters, so its pin isn't on the map.\n\nClear the filters and show it?`);
+      if (!proceed) return;
+      clearFilters();          // this re-renders the board and the map
+    }
+
+    switchTab("map");
+    // Two frames: one for switchTab's invalidateSize, one for the resulting layout.
+    requestAnimationFrame(() => requestAnimationFrame(() => focusPin(id)));
   }
 
   // ---------- Google Maps export ----------
@@ -2207,8 +2264,8 @@ https://maps.apple.com/?ll=…"></textarea>
       ${idea.desc ? `<div class="mp-desc">${escapeHtml(idea.desc)}</div>` : ""}
       <div class="mp-actions">
         <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">🧭 Google</a>
-        <a href="https://maps.apple.com/?daddr=${ll}&q=${gLabel}" target="_blank" rel="noopener">🍎 Apple</a>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">Google Maps</a>
+        <a href="https://maps.apple.com/?daddr=${ll}&q=${gLabel}" target="_blank" rel="noopener"> Maps</a>
         <button onclick="openLocationEditor('${idea.id}')" title="${escapeHtml(geoSourceLabel(idea))}">${needsLocationConfirm(idea) ? "⚠️ Confirm location" : "📍 Fix location"}</button>
       </div>
       <div style="font-size:0.68rem; color:var(--muted); margin-top:6px;">${escapeHtml(geoSourceLabel(idea))}</div>
@@ -2331,6 +2388,10 @@ https://maps.apple.com/?ll=…"></textarea>
   function focusPin(id) {
     const idea = data.ideas.find(i => i.id === id);
     if (!idea || !map) return;
+    // Guard: an idea with no resolved location has lat/lng of null, and setView(null)
+    // silently corrupts the map view.
+    if (typeof idea.lat !== "number" || !isFinite(idea.lat) ||
+        typeof idea.lng !== "number" || !isFinite(idea.lng)) return;
     map.setView([idea.lat, idea.lng], 16);
     pinLayer.eachLayer(l => {
       const ll = l.getLatLng();
