@@ -2355,16 +2355,24 @@ https://maps.apple.com/?ll=…"></textarea>
     "link-fallback-name": "⚠️ link couldn't be read — searched the idea name",
     "address": "📮 from an address in the description",
     "name": "🔎 searched the idea's name",
+    "poi": "🏪 matched a place by name",
     "manual": "✋ set manually (coordinates)",
     "manual-link": "✋ set manually (Maps link)",
     "manual-link-name": "✋ set manually (link place name)",
     "manual-address": "✋ set manually (address)",
+    "manual-place": "✋ set manually (place name)",
     "chosen": "✅ chosen from search results"
   };
   function geoSourceLabel(idea) {
     let raw = String(idea.geocodedFrom || "");
     if (!raw) return "not resolved yet";
-    if (raw.indexOf("failed") === 0) return "⚠️ couldn't be located (" + raw.replace("failed:", "") + ")";
+    if (raw.indexOf("failed") === 0) {
+      const why = raw.replace("failed:", "");
+      // "-citywide" means the geocoder only matched the whole city, which we reject.
+      return why.indexOf("-citywide") !== -1
+        ? "⚠️ couldn't be pinpointed — only matched the city"
+        : "⚠️ couldn't be located (" + why + ")";
+    }
     const ambiguous = raw.slice(-1) === "?";
     if (ambiguous) raw = raw.slice(0, -1);
     return (GEO_SOURCE_LABEL[raw] || raw) + (ambiguous ? " — several matches, unconfirmed" : "");
@@ -2458,7 +2466,7 @@ https://maps.apple.com/?ll=…"></textarea>
     }
     hint.innerHTML = locCandidates.length === 1
       ? "One match found — tap it to confirm this is the right spot."
-      : `<b>${locCandidates.length} possible locations</b> — tap the correct one. Addresses are shown so you can tell branches apart.`;
+      : `<b>${locCandidates.length} possible locations</b> — tap the correct one. Each shows its street address so you can tell branches apart.`;
 
     const cur = idea && typeof idea.lat === "number" ? [idea.lat, idea.lng] : null;
     list.innerHTML = locCandidates.map((c, i) => {
@@ -2466,10 +2474,15 @@ https://maps.apple.com/?ll=…"></textarea>
       const isCurrent = cur && Math.abs(c.lat - cur[0]) < 1e-4 && Math.abs(c.lng - cur[1]) < 1e-4;
       const dist = myLatLng ? formatDistance(distanceKm(myLatLng, [c.lat, c.lng])) + " away" : "";
       const vague = c.partial || c.locationType === "APPROXIMATE";
+      // POI results have a real business name + category; geocoder results only an address.
+      const title = c.name || c.address || (c.lat.toFixed(5) + ", " + c.lng.toFixed(5));
+      const sub = c.name && c.address && c.address !== c.name ? c.address : "";
+      const cat = c.category ? c.category.replace(/_/g, " ") : "";
       return `<button type="button" class="cand-row ${isCurrent ? "is-current" : ""}" onclick="chooseCandidate(${i})">
         <span class="cand-num">${i + 1}</span>
         <span class="cand-body">
-          <span class="cand-addr">${escapeHtml(c.address || (c.lat.toFixed(5) + ", " + c.lng.toFixed(5)))}</span>
+          <span class="cand-addr">${escapeHtml(title)}${cat ? ` <span style="color:var(--muted); font-weight:400; font-size:0.76rem;">· ${escapeHtml(cat)}</span>` : ""}</span>
+          ${sub ? `<span class="cand-sub">${escapeHtml(sub)}</span>` : ""}
           <span class="cand-sub">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}${dist ? " · " + escapeHtml(dist) : ""}${isCurrent ? " · <b>current pin</b>" : ""}${vague ? ' · <span class="cand-flag">approximate</span>' : ""}</span>
         </span>
       </button>`;
