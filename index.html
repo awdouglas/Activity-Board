@@ -244,8 +244,10 @@
   .time-form input { margin: 0; flex: 1; min-width: 180px; }
 
   /* Modal */
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 50; padding: 20px; }
-  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 340px; max-width: 100%; text-align: center; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 50; padding: 20px; overflow-y: auto; }
+  /* min-width:0 is essential — as a GRID ITEM the modal defaults to min-width:auto, which
+     lets long content (URLs, wide rows) push it past max-width:100% and off-screen. */
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 340px; max-width: 100%; min-width: 0; text-align: center; }
   .modal.wide { width: 420px; text-align: left; }
   .modal h2 { margin: 0 0 8px; }
   .modal p { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
@@ -266,6 +268,34 @@
   .help-section ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
   .help-section li { margin-bottom: 4px; }
   .help-section b { color: var(--text); }
+
+  /* ---------- Modals on small screens ----------
+     The initials/help/set-location modals were overflowing on phones. Three causes,
+     all addressed here: generous desktop padding eating the narrow viewport, long
+     unbreakable strings (URLs, addresses) forcing the box wider, and 3-up button rows
+     that can't fit side by side. */
+  @media (max-width: 540px) {
+    .overlay { padding: 12px; place-items: start center; }
+    .modal { padding: 20px 16px; width: 100%; }
+    .modal.wide { width: 100%; }
+    .modal h2 { font-size: 1.15rem; }
+    /* Long URLs / addresses must wrap instead of widening the modal. */
+    .modal, .modal p, .modal label, .cand-row, .cand-addr, .cand-sub, .help-section p, .help-section li {
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    /* Stack action rows so three buttons don't get squeezed to unreadable slivers. */
+    .modal .row { flex-direction: column; }
+    .modal .row .btn { width: 100%; flex: none !important; }
+    /* Tab switcher stays side-by-side but tightens up. */
+    .loc-tabs button { padding: 8px 6px; font-size: 0.78rem; }
+    .cand-list { max-height: 40vh; }
+    .help-modal { width: 100%; max-height: 88vh; }
+    .help-header { padding: 16px 18px 12px; }
+    .help-header h2 { font-size: 1.05rem; }
+    .help-body { padding: 16px 18px 20px; }
+    /* Keep the location textarea inside the modal on iOS. */
+    #locInput, #locSearchInput { width: 100%; max-width: 100%; min-width: 0; }
+  }
 
   /* Tags */
   .tag-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
@@ -2476,13 +2506,21 @@ https://maps.apple.com/?ll=…"></textarea>
       const p = f.properties || {};
       const lng = Number(c[0]), lat = Number(c[1]);
       if (!isFinite(lat) || !isFinite(lng)) return null;
+      // Some OSM entries genuinely have no housenumber tag (verified: Café Myriade's
+      // Clark and Atwater branches), so the street alone is the most precise thing
+      // available. Including the POSTCODE keeps such rows distinguishable from each
+      // other, and `hasStreetNumber` lets the UI say the address is partial rather
+      // than implying it's the complete one.
       const street = [p.housenumber, p.street].filter(Boolean).join(" ");
-      const address = [street, p.district, p.city || p.town || p.village, p.state]
+      const address = [street, p.district, p.city || p.town || p.village, p.postcode]
                       .filter(Boolean).join(", ");
       return {
         lat, lng,
         name: String(p.name || ""),
         address: address || String(p.name || ""),
+        street: String(p.street || ""),
+        postcode: String(p.postcode || ""),
+        hasStreetNumber: !!p.housenumber,
         category: String(p.osm_value || p.osm_key || ""),
         source: "poi", partial: false, locationType: ""
       };
@@ -2615,11 +2653,14 @@ https://maps.apple.com/?ll=…"></textarea>
       const title = c.name || c.address || (c.lat.toFixed(5) + ", " + c.lng.toFixed(5));
       const sub = c.name && c.address && c.address !== c.name ? c.address : "";
       const cat = c.category ? c.category.replace(/_/g, " ") : "";
+      // OSM sometimes has the street but no house number. Say so rather than letting a
+      // partial address look like the full one.
+      const noNumber = c.source === "poi" && c.street && !c.hasStreetNumber;
       return `<button type="button" class="cand-row ${isCurrent ? "is-current" : ""}" onclick="chooseCandidate(${i})">
         <span class="cand-num">${i + 1}</span>
         <span class="cand-body">
           <span class="cand-addr">${escapeHtml(title)}${cat ? ` <span style="color:var(--muted); font-weight:400; font-size:0.76rem;">· ${escapeHtml(cat)}</span>` : ""}</span>
-          ${sub ? `<span class="cand-sub">${escapeHtml(sub)}</span>` : ""}
+          ${sub ? `<span class="cand-sub">${escapeHtml(sub)}${noNumber ? ' <span class="cand-flag">· no street number in map data</span>' : ""}</span>` : ""}
           <span class="cand-sub">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}${dist ? " · " + escapeHtml(dist) : ""}${isCurrent ? " · <b>current pin</b>" : ""}${vague ? ' · <span class="cand-flag">approximate</span>' : ""}</span>
         </span>
       </button>`;
