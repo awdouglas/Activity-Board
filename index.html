@@ -495,12 +495,21 @@
   .map-nearby-row .mn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Location candidate picker (inside the Set-location modal) */
-  .cand-list { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; max-height: 44vh; overflow-y: auto; }
+  /* Scrolls once the list is long. padding-right + scrollbar-gutter keep the rows clear
+     of the scrollbar — macOS/iOS use OVERLAY scrollbars that reserve no space of their
+     own and would otherwise clip each row's right edge. */
+  .cand-list {
+    display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px;
+    max-height: 44vh; overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable;
+  }
   .cand-row {
     display: flex; align-items: flex-start; gap: 10px; text-align: left;
     background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
     border-radius: 10px; padding: 9px 11px; cursor: pointer; font-family: inherit;
-    font-size: 0.85rem; width: 100%; transition: all 0.15s;
+    font-size: 0.85rem; transition: all 0.15s;
+    /* No width:100% — the flex column already stretches rows, and an explicit width
+       resolves against the full content box, sliding the right border under the bar. */
+    min-width: 0;
   }
   .cand-row:hover { border-color: var(--accent); background: var(--card-hover); }
   .cand-row.is-current { border-color: var(--up); }
