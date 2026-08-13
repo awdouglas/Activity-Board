@@ -523,6 +523,7 @@
   .cand-row .cand-sub { display: block; color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
   .cand-row .cand-flag { color: var(--time); font-weight: 700; }
   .cand-hint { font-size: 0.78rem; color: var(--muted); margin: 0 0 10px; }
+
   .loc-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
   .loc-tabs button {
     flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--muted);
@@ -717,7 +718,7 @@
         <textarea id="locInput" rows="3" placeholder="1432 Rue Mackay, Montreal
 45.4952, -73.5793
 https://maps.app.goo.gl/…
-https://maps.apple.com/?ll=…"></textarea>
+https://maps.apple/p/…"></textarea>
         <div style="font-size:0.75rem; color:var(--muted); margin:-6px 0 14px;">
           Any of these work — a street address, a <b>lat, lng</b> pair, or a share link from
           Google or Apple Maps (short links are expanded automatically).
@@ -1709,6 +1710,7 @@ https://maps.apple.com/?ll=…"></textarea>
         ? `<div class="idea-tags">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>`
         : "";
 
+
       return `
         <div class="idea" data-idea-id="${idea.id}">
           <div class="vote">
@@ -2072,7 +2074,7 @@ https://maps.apple.com/?ll=…"></textarea>
   // (bulk import, geocoded automatically) or per-idea links to Save manually.
 
   // A Google Maps URL anywhere in a string (maps.google.*, google.*/maps, goo.gl/maps, maps.app.goo.gl).
-  const MAPS_URL_RE = /https?:\/\/(?:www\.)?(?:maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z.]+|(?:www\.)?google\.[a-z.]+\/maps)[^\s<]*/i;
+  const MAPS_URL_RE = /https?:\/\/(?:www\.)?(?:maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z.]+|(?:www\.)?google\.[a-z.]+\/maps|maps\.apple\.com|maps\.apple(?![a-z0-9.-])|guides\.apple\.com)[^\s<]*/i;
 
   // A street address in either English suffix order ("1234 Sainte-Catherine St") or
   // French/Spanish prefix order ("158 Rue Saint-Viateur Ouest"). Street-name tokens must
@@ -2261,11 +2263,12 @@ https://maps.apple.com/?ll=…"></textarea>
     const when = sched ? formatDateTime(sched.date + "T" + minutesToTimeStr(sched.startMin)) : "";
     const tags = (idea.tags || []).length
       ? `<div class="idea-tags" style="margin:4px 0 6px;">${idea.tags.map(t => `<span class="idea-tag">${escapeHtml(t)}</span>`).join("")}</div>` : "";
-    // Search/directions links use the pin's COORDINATES, not the idea's name — a name
-    // search re-introduces the ambiguity the pin already resolved (e.g. a chain with
-    // several branches would send you to the wrong one).
-    const ll = `${idea.lat},${idea.lng}`;
-    const gLabel = encodeURIComponent(idea.name);
+    // Links go to the PLACE LISTING, not directions. Passing the name AND coordinates
+    // together is what makes each app resolve the actual business at that spot —
+    // coordinates alone drop a generic pin, and the name alone would re-introduce the
+    // chain ambiguity the pin already settled.
+    const gQuery = encodeURIComponent(`${idea.name}, ${idea.lat},${idea.lng}`);
+    const aQuery = encodeURIComponent(idea.name);
     return `<div class="map-pop">
       <h4>${escapeHtml(idea.name)}</h4>
       <div class="mp-meta">▲ ${votes} vote${votes === 1 ? "" : "s"} · by ${escapeHtml(idea.author)}${when ? " · " + escapeHtml(when) : ""}${ideaHasReservation(idea) ? " · 🔒 reserved" : ""}</div>
@@ -2273,8 +2276,8 @@ https://maps.apple.com/?ll=…"></textarea>
       ${idea.desc ? `<div class="mp-desc">${escapeHtml(idea.desc)}</div>` : ""}
       <div class="mp-actions">
         <button onclick="jumpToIdea('${idea.id}')">📋 View on board</button>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">Google Maps</a>
-        <a href="https://maps.apple.com/?daddr=${ll}&q=${gLabel}" target="_blank" rel="noopener"> Maps</a>
+        <a href="https://www.google.com/maps/search/?api=1&query=${gQuery}" target="_blank" rel="noopener">Google Maps</a>
+        <a href="https://maps.apple.com/?q=${aQuery}&ll=${idea.lat},${idea.lng}&t=m" target="_blank" rel="noopener"> Maps</a>
         <button onclick="openLocationEditor('${idea.id}')" title="${escapeHtml(geoSourceLabel(idea))}">${needsLocationConfirm(idea) ? "⚠️ Confirm location" : "📍 Fix location"}</button>
       </div>
       <div style="font-size:0.68rem; color:var(--muted); margin-top:6px;">${escapeHtml(geoSourceLabel(idea))}</div>
@@ -2599,9 +2602,12 @@ https://maps.apple.com/?ll=…"></textarea>
 
   // Is this coordinate basically the city centroid? That's what an address geocoder
   // returns when it can't find a place — a confident-looking wrong answer.
+  // Must stay TIGHT (~120m) and match isCityCentroid() in Code-map.gs. A wide box
+  // rejects genuine downtown results — "1206 Rue Stanley" is only ~400m from the
+  // centroid and was being discarded as "only matched the city".
   function isCityCentroidClient(lat, lng) {
-    return Math.abs(lat - MAP_DEFAULT_CENTER[0]) < 0.0055 &&
-           Math.abs(lng - MAP_DEFAULT_CENTER[1]) < 0.0075;
+    return Math.abs(lat - MAP_DEFAULT_CENTER[0]) < 0.0011 &&
+           Math.abs(lng - MAP_DEFAULT_CENTER[1]) < 0.0015;
   }
 
   /**
